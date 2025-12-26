@@ -10,9 +10,9 @@ from clean_data import clean_data
 from feature_engineering import generate_features
 
 # Configuration
-TICKERS = ['SPY', 'QQQ', 'AAPL', 'MSFT']
-START_DATE = '2020-01-01'
-END_DATE = '2024-12-31'
+TICKERS = ['WMT', 'JNJ', 'JPM', 'MSFT', 'NVDA', 'GOOGL', 'TSLA', 'AMZN','BAC','BK']
+START_DATE = '2021-01-01'
+END_DATE = '2025-12-24'
 PROCESSED_DIR = "data/processed"
 OUTPUT_FILE = "data/processed/features_dataset.parquet"
 
