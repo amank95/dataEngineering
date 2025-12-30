@@ -12,7 +12,7 @@ from feature_engineering import generate_features
 # Configuration
 TICKERS = ['WMT', 'JNJ', 'JPM', 'MSFT', 'NVDA', 'GOOGL', 'TSLA', 'AMZN','BAC','BK']
 START_DATE = '2021-01-01'
-END_DATE = '2025-12-24'
+END_DATE = '2025-12-29'
 PROCESSED_DIR = "data/processed"
 OUTPUT_FILE = "data/processed/features_dataset.parquet"
 
