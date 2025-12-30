@@ -110,7 +110,8 @@ ENV/
 env.bak/
 venv.bak/
 
-.qodo
+.DashboardDemo
+DashboardDemo
 
 # Spyder project settings
 .spyderproject
