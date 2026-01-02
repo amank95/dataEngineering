@@ -5,8 +5,8 @@ This module provides direct access to pandas DataFrames for the ML team.
 Instead of reading saved files, ML engineers can call these functions to get
 DataFrames directly in memory for model training.
 
-This module REUSES the existing pipeline functions (fetch_data, clean_data, 
-generate_features) to avoid code duplication.
+This module USES the existing pipeline functions (fetch_data, clean_data, 
+generate_features)
 
 Usage Example:
 --------------
