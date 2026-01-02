@@ -139,3 +139,18 @@ cython_debug/
 
 # Data
 data/
+
+# Internal documentation (not needed by ML team in GitHub)
+EMAIL_TO_ML_TEAM.md
+HANDOFF_CHECKLIST.md
+IMPLEMENTATION_SUMMARY.md
+COMPARISON.md
+GITHUB_PUSH_SUMMARY.md
+verify_ml_access.py
+example_ml_usage.py
+ML_TEAM_GUIDE.md
+test_env.py
+data_pipeline.py
+
+# Notebooks (if you have experimental notebooks)
+notebooks/

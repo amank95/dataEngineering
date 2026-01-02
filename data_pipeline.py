@@ -11,8 +11,8 @@ from feature_engineering import generate_features
 
 # Configuration
 TICKERS = ['WMT', 'JNJ', 'JPM', 'MSFT', 'NVDA', 'GOOGL', 'TSLA', 'AMZN','BAC','BK']
-START_DATE = '2021-01-01'
-END_DATE = '2025-12-29'
+START_DATE = '2022-01-01'
+END_DATE = '2026-01-01'
 PROCESSED_DIR = "data/processed"
 OUTPUT_FILE = "data/processed/features_dataset.parquet"
 
@@ -49,10 +49,22 @@ def main():
             # We need: 'Return', 'SMA_20', 'SMA_50', 'RSI_14'
             
             rename_map = {
+                'ticker': 'Ticker',
+                'macd': 'MACD',
                 'daily_return': 'Return',
                 'ma_20': 'SMA_20',
                 'ma_50': 'SMA_50',
-                'rsi_14': 'RSI_14' # Capitalize if needed, though we set it as rsi_14 in script
+                'rsi_14': 'RSI_14', # Capitalize if needed, though we set it as rsi_14 in script
+                'volatility': 'Volatility'
+
+    # 'rsi_14': 'RSI',
+
+    # 'daily_return': 'Daily_Return',
+    # 'ema_20': 'EMA_20',
+    # 'ema_50': 'EMA_50',
+    # 'sma_20': 'SMA_20',
+    # 'sma_50': 'SMA_50'
+            
             }
             df.rename(columns=rename_map, inplace=True)
             
