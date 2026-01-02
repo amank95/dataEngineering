@@ -3,6 +3,23 @@
 import pandas as pd
 import os
 import yfinance as yf
+import sys
+
+# Add parent directory to path to import config_loader
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(parent_dir)
+
+try:
+    from config_loader import get_config
+    # Import data quality from same directory
+    from data_quality import validate_ohlc, detect_outliers, check_data_freshness, validate_data_ranges, get_data_quality_report
+    DATA_QUALITY_ENABLED = True
+except ImportError as e:
+    # Fallback if data_quality module not available
+    DATA_QUALITY_ENABLED = False
+    # Only print warning if module exists but import failed for other reasons
+    if 'data_quality' in str(e):
+        pass  # Module doesn't exist yet, that's okay
 
 def clean_data(ticker="AAPL"):
     """
@@ -48,6 +65,57 @@ def clean_data(ticker="AAPL"):
 
     # drop missing values
     df.dropna(inplace=True)
+    
+    # ============================================
+    # DATA QUALITY VALIDATION
+    # ============================================
+    if DATA_QUALITY_ENABLED:
+        try:
+            config = get_config()
+            validate_ohlc_flag = config.get('processing', {}).get('validate_ohlc', True)
+            min_data_points = config.get('processing', {}).get('min_data_points', 50)
+            
+            # 1. Check minimum data points
+            if len(df) < min_data_points:
+                print(f"⚠️  Warning: Only {len(df)} data points (minimum: {min_data_points})")
+            
+            # 2. Validate OHLC relationships
+            if validate_ohlc_flag and all(col in df.columns for col in ['open', 'high', 'low', 'close']):
+                is_valid, errors = validate_ohlc(df)
+                if not is_valid:
+                    print(f"⚠️  OHLC Validation Issues for {ticker}:")
+                    for error in errors:
+                        print(f"   - {error}")
+                else:
+                    print(f"✅ OHLC validation passed for {ticker}")
+            
+            # 3. Detect outliers
+            outliers = detect_outliers(df, method='iqr', threshold=3.0)
+            total_outliers = sum([outliers[col].sum() for col in outliers])
+            if total_outliers > 0:
+                print(f"⚠️  Detected {total_outliers} outliers in {ticker}")
+                for col, outlier_mask in outliers.items():
+                    count = outlier_mask.sum()
+                    if count > 0:
+                        print(f"   - {col}: {count} outliers")
+            else:
+                print(f"✅ No significant outliers detected for {ticker}")
+            
+            # 4. Validate data ranges
+            is_valid, warnings = validate_data_ranges(df)
+            if warnings:
+                print(f"⚠️  Data Range Warnings for {ticker}:")
+                for warning in warnings:
+                    print(f"   - {warning}")
+            
+            # 5. Generate quality report (optional, can be verbose)
+            # Uncomment if you want detailed report
+            # report = get_data_quality_report(df, ticker)
+            # print(f"📊 Quality Score: {report['quality_score']:.1f}/100")
+            
+        except Exception as e:
+            print(f"⚠️  Data quality check failed: {e}")
+            print("   Continuing with data processing...")
 
     # Convert USD to INR
     print("Fetching USD to INR exchange rates...")
@@ -93,6 +161,15 @@ def clean_data(ticker="AAPL"):
     except Exception as e:
         print(f"Warning: Could not convert to INR. Error: {e}")
         print("Saving in USD instead.")
+    
+    # Check data freshness before saving
+    if DATA_QUALITY_ENABLED:
+        try:
+            is_fresh, freshness_msg = check_data_freshness(raw_path, max_age_hours=24)
+            if not is_fresh:
+                print(f"⚠️  {freshness_msg}")
+        except Exception as e:
+            print(f"⚠️  Could not check data freshness: {e}")
     
     # save to csv
     df.to_csv(processed_path)

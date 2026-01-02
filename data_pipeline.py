@@ -8,13 +8,14 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 from fetch_data import fetch_data
 from clean_data import clean_data
 from feature_engineering import generate_features
+from config_loader import get_tickers, get_start_date, get_end_date, get_processed_dir, get_output_file
 
-# Configuration
-TICKERS = ['WMT', 'JNJ', 'JPM', 'MSFT', 'NVDA', 'GOOGL', 'TSLA', 'AMZN','BAC','BK']
-START_DATE = '2022-01-01'
-END_DATE = '2026-01-01'
-PROCESSED_DIR = "data/processed"
-OUTPUT_FILE = "data/processed/features_dataset.parquet"
+# Load configuration from config.yaml (with defaults as fallback)
+TICKERS = get_tickers()
+START_DATE = get_start_date()
+END_DATE = get_end_date()
+PROCESSED_DIR = get_processed_dir()
+OUTPUT_FILE = get_output_file()
 
 def main():
     print("Starting Data Pipeline...")

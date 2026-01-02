@@ -110,13 +110,23 @@ model.fit(X, y)
 
 ## 🔧 Configuration
 
-Edit `data_pipeline.py` to customize:
+Edit `config.yaml` to customize settings:
 
-```python
-TICKERS = ['WMT', 'JNJ', 'JPM', 'MSFT', 'NVDA', 'GOOGL', 'TSLA', 'AMZN', 'BAC', 'BK']
-START_DATE = '2022-01-01'
-END_DATE = '2026-01-01'
+```yaml
+tickers:
+  - WMT
+  - JNJ
+  - MSFT
+
+dates:
+  start_date: '2022-01-01'
+  end_date: 'today'  # Automatically uses current system date (works on any device!)
 ```
+
+**End Date Options:**
+- `'today'`, `'now'`, or `'current'` → Uses current system date (recommended)
+- Specific date like `'2026-01-01'` → Uses that date
+- Works on any device (phone, laptop, tablet) - uses the device's current date
 
 ## 📝 Data Flow
 
