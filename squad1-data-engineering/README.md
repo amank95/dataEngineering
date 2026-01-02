@@ -22,8 +22,6 @@ squad1-data-engineering/
 │   └── processed/               # Cleaned and feature-engineered data
 ├── data_pipeline.py             # Main pipeline (saves to files)
 ├── ml_data_access.py            # Direct DataFrame access for ML team
-├── example_ml_usage.py          # Usage examples
-├── ML_TEAM_GUIDE.md            # Comprehensive guide for ML team
 └── requirements.txt             # Python dependencies
 ```
 
