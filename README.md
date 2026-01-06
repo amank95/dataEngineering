@@ -22,8 +22,6 @@ squad1-data-engineering/
 │   └── processed/               # Cleaned and feature-engineered data
 ├── data_pipeline.py             # Main pipeline (saves to files)
 ├── ml_data_access.py            # Direct DataFrame access for ML team
-├── example_ml_usage.py          # Usage examples
-├── ML_TEAM_GUIDE.md            # Comprehensive guide for ML team
 └── requirements.txt             # Python dependencies
 ```
 
@@ -76,8 +74,8 @@ All prices are automatically converted from USD to INR.
 
 ### What Changed?
 
-**Before:** You had to read saved Parquet/CSV files  
-**Now:** You can get DataFrames directly from the pipeline code
+**Before:** Our team had to read saved Parquet/CSV files  
+**Now:** ML team can get DataFrames directly from the pipeline code
 
 ### Quick Example
 
@@ -104,9 +102,6 @@ model.fit(X, y)
 | `get_processed_dataframe()` | Single ticker with all features ⭐ |
 | `get_all_tickers_dataframe()` | Multiple tickers consolidated ⭐ |
 
-**📖 See [ML_TEAM_GUIDE.md](ML_TEAM_GUIDE.md) for detailed documentation**
-
-**💡 See [example_ml_usage.py](example_ml_usage.py) for practical examples**
 
 ## 🔧 Configuration
 
@@ -140,14 +135,6 @@ dates:
 4. Output:
    - File-based: Save to Parquet/CSV
    - Direct access: Return DataFrame
-```
-
-## 🧪 Testing
-
-Run the example script to verify everything works:
-
-```bash
-python example_ml_usage.py
 ```
 
 ## 📦 Dependencies
