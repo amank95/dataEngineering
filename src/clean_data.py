@@ -30,8 +30,12 @@ def clean_data(ticker="AAPL"):
     """
     
     # define paths
-    raw_path = f"data/raw/{ticker}_raw.csv"
-    processed_dir = "data/processed"
+    # define paths
+    config = get_config()
+    raw_dir = config['paths']['raw_data_dir']
+    processed_dir = config['paths']['processed_data_dir']
+    
+    raw_path = f"{raw_dir}/{ticker}_raw.csv"
     os.makedirs(processed_dir, exist_ok=True)
     processed_path = f"{processed_dir}/{ticker}_cleaned.csv"
     

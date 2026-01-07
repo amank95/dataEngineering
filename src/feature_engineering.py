@@ -35,8 +35,10 @@ def generate_features(ticker="AAPL"):
     features_config = config.get('features', {})
     
     # define paths
-    input_path = f"data/processed/{ticker}_cleaned.csv"
-    output_dir = "data/processed"
+    # define paths
+    processed_dir = config['paths']['processed_data_dir']
+    input_path = f"{processed_dir}/{ticker}_cleaned.csv"
+    output_dir = processed_dir
     output_path = f"{output_dir}/{ticker}_final.csv"
     
     print(f"Generating features for {ticker}...")
