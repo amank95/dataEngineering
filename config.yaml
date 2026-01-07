@@ -10,6 +10,90 @@ tickers:
   # Indian IT Companies
   - INFY.NS      # Infosys
   - TCS.NS       # Tata Consultancy Services
+  - WIPRO.NS     # Wipro
+  - HCLTECH.NS   # HCL Technologies
+  - TECHM.NS     # Tech Mahindra
+  - LTIM.NS      # LTI Mindtree
+  - MPHASIS.NS   # Mphasis
+  - PERSISTENT.NS # Persistent Systems
+  - COFORGE.NS   # Coforge
+  - CYIENT.NS    # Cyient
+  - SONATA.NS    # Sonata Software
+  - NEWGEN.NS    # Newgen Software
+  - INTELLECT.NS # Intellect Design Arena
+  - FIRSTSOURCE.NS # Firstsource Solutions
+  - KPITTECH.NS  # KPIT Technologies
+  - ZENSAR.NS    # Zensar Technologies
+  - ROLTA.NS     # Rolta India
+  - 3IINFOTECH.NS # 3i Infotech
+  - MINDTREE.NS  # Mindtree (now part of LTIM)
+  - LTI.NS       # L&T Infotech
+  
+  # Indian Government Companies (PSUs)
+  - ONGC.NS      # Oil and Natural Gas Corporation
+  - IOC.NS       # Indian Oil Corporation
+  - BPCL.NS      # Bharat Petroleum
+  - HPCL.NS      # Hindustan Petroleum
+  - GAIL.NS      # GAIL India
+  - NTPC.NS      # NTPC Limited
+  - POWERGRID.NS # Power Grid Corporation
+  - NHPC.NS      # NHPC Limited
+  - SJVN.NS      # SJVN Limited
+  - COALINDIA.NS # Coal India
+  - SAIL.NS      # Steel Authority of India
+  - NMDC.NS      # NMDC Limited
+  - HAL.NS       # Hindustan Aeronautics
+  - BEL.NS       # Bharat Electronics
+  - BHEL.NS      # Bharat Heavy Electricals
+  - CONCOR.NS    # Container Corporation
+  - MMTC.NS      # MMTC Limited
+  - STC.NS       # State Trading Corporation
+  - RITES.NS     # RITES Limited
+  - IRCTC.NS     # Indian Railway Catering
+  - IRFC.NS      # Indian Railway Finance Corporation
+  - RVNL.NS      # Rail Vikas Nigam Limited
+  - ITI.NS       # ITI Limited
+  - MTNL.NS      # Mahanagar Telephone Nigam
+  - RECLTD.NS    # REC Limited
+  - PFC.NS       # Power Finance Corporation
+  - NLCINDIA.NS  # NLC India Limited
+  - MOIL.NS      # MOIL Limited
+  - KIOCL.NS     # KIOCL Limited
+  - HUDCO.NS     # HUDCO
+  - NBCC.NS      # NBCC India
+  
+  # Additional Major Indian Companies (Mixed Sectors)
+  - RELIANCE.NS  # Reliance Industries
+  - TATAMOTORS.NS # Tata Motors
+  - TATASTEEL.NS # Tata Steel
+  - BHARTIARTL.NS # Bharti Airtel
+  - ICICIBANK.NS # ICICI Bank
+  - HDFCBANK.NS  # HDFC Bank
+  - SBIN.NS      # State Bank of India
+  - AXISBANK.NS  # Axis Bank
+  - KOTAKBANK.NS # Kotak Mahindra Bank
+  - ASHOKLEY.NS  # Ashok Leyland
+  - MARUTI.NS    # Maruti Suzuki
+  - M&M.NS       # Mahindra & Mahindra
+  - BAJFINANCE.NS # Bajaj Finance
+  - HDFC.NS      # HDFC Limited
+  - LT.NS        # Larsen & Toubro
+  - ADANIPORTS.NS # Adani Ports
+  - ULTRACEMCO.NS # UltraTech Cement
+  - GRASIM.NS    # Grasim Industries
+  - ITC.NS       # ITC Limited
+  - HINDUNILVR.NS # Hindustan Unilever
+  - NESTLEIND.NS # Nestle India
+  - BRITANNIA.NS # Britannia Industries
+  - SUNPHARMA.NS # Sun Pharmaceutical
+  - DRREDDY.NS   # Dr. Reddy's Laboratories
+  - CIPLA.NS    # Cipla
+  - LUPIN.NS    # Lupin
+  - DIVISLAB.NS  # Divi's Laboratories
+  - TITAN.NS    # Titan Company
+  - JSWSTEEL.NS  # JSW Steel
+  - VEDL.NS     # Vedanta Limited
+  - HINDALCO.NS  # Hindalco Industries
  
 
 # Date Range Configuration
