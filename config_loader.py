@@ -8,7 +8,7 @@ Ensures backward compatibility if config file doesn't exist.
 import os
 import yaml
 from typing import Dict, List, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Default configuration (fallback if config.yaml doesn't exist)
 # Indian tickers with .NS suffix for NSE (National Stock Exchange)
@@ -122,8 +122,10 @@ def get_end_date() -> str:
     # If end_date is 'today', 'now', None, or empty, use current system date
     if end_date is None or end_date == '' or str(end_date).lower() in ['today', 'now', 'current']:
         # Get current system date in YYYY-MM-DD format
-        current_date = datetime.now().strftime('%Y-%m-%d')
-        return current_date
+        # Get current system date + 1 day (because yfinance end_date is exclusive)
+        # We want to include "today", so we must set end_date to "tomorrow"
+        tomorrow = datetime.now() + timedelta(days=1)
+        return tomorrow.strftime('%Y-%m-%d')
     
     return end_date
 
