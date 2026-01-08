@@ -6,6 +6,7 @@
 # Stock/ETF Tickers to Process
 # Indian Stocks (NSE format: TICKER.NS)
 # IT Companies
+# List of 50 good performing and bad performinmg stocks from various sectors
 tickers:
   # Indian IT Companies
   - INFY.NS      # Infosys
@@ -130,4 +131,3 @@ processing:
   drop_na: true
   validate_ohlc: true
   min_data_points: 50  # Minimum rows required for processing
-
