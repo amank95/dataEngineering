@@ -36,22 +36,23 @@ CONFIG = get_config()
 def get_dynamic_rename_map():
     """
     Generates a column rename map dynamically based on configuration.
+    Column names match Supabase schema (lowercase with underscores).
     """
     rename_map = {
-        'ticker': 'Ticker',
-        'macd': 'MACD',
-        'daily_return': 'Return',
-        'volatility': 'Volatility',
+        # Keep lowercase to match Supabase schema
+        'macd': 'macd',
+        'daily_return': 'daily_return',
+        'volatility': 'volatility',
     }
     
-    # Dynamic SMA mapping
+    # Dynamic SMA mapping (lowercase)
     sma_periods = CONFIG.get('features', {}).get('sma_periods', [20, 50])
     for period in sma_periods:
-        rename_map[f'ma_{period}'] = f'SMA_{period}'
+        rename_map[f'ma_{period}'] = f'sma_{period}'
         
-    # Dynamic RSI mapping
+    # Dynamic RSI mapping (lowercase)
     rsi_period = CONFIG.get('features', {}).get('rsi_period', 14)
-    rename_map[f'rsi_{rsi_period}'] = f'RSI_{rsi_period}'
+    rename_map[f'rsi_{rsi_period}'] = f'rsi_{rsi_period}'
 
     return rename_map
 
@@ -76,14 +77,18 @@ def process_ticker(ticker):
         # 4. Read back the processed data for consolidation
         final_path = f"data/processed/{ticker}_final.csv"
         if os.path.exists(final_path):
-            df = pd.read_csv(final_path)
+            # Read CSV with date as index (as saved by feature_engineering.py)
+            df = pd.read_csv(final_path, index_col='date', parse_dates=True)
+            
+            # Reset index to make 'date' a regular column
+            df.reset_index(inplace=True)
             
             # Use dynamic rename map
             rename_map = get_dynamic_rename_map()
             df.rename(columns=rename_map, inplace=True)
             
-            # Ensure Ticker column exists
-            df['Ticker'] = ticker
+            # Ensure ticker column exists (lowercase to match Supabase schema)
+            df['ticker'] = ticker
             
             return df
         else:
@@ -137,14 +142,71 @@ def main():
         logger.info(f"Saving to {OUTPUT_FILE}...")
         master_data.to_parquet(OUTPUT_FILE, index=False)
         logger.info("Pipeline completed successfully.")
+        
+        # Optional: Auto-sync to Supabase
+        if CONFIG.get('supabase', {}).get('auto_sync', False):
+            logger.info("Auto-sync to Supabase is enabled. Starting sync...")
+            try:
+                from supabase_ingestion import SupabaseIngestion
+                
+                supabase_url = os.getenv('SUPABASE_URL')
+                supabase_key = os.getenv('SUPABASE_KEY')
+                
+                if supabase_url and supabase_key:
+                    batch_size = CONFIG.get('supabase', {}).get('batch_size', 1000)
+                    ingestion = SupabaseIngestion(supabase_url, supabase_key, batch_size)
+                    sync_summary = ingestion.sync_data(OUTPUT_FILE, dry_run=False)
+                    
+                    logger.info(f"Supabase sync completed: {sync_summary['success_count']} records synced")
+                else:
+                    logger.warning("Supabase credentials not found in environment. Skipping sync.")
+                    logger.warning("Set SUPABASE_URL and SUPABASE_KEY in .env file to enable auto-sync.")
+                    
+            except ImportError:
+                logger.error("supabase_ingestion module not found. Skipping sync.")
+            except Exception as e:
+                logger.error(f"Supabase sync failed: {e}")
+                logger.warning("Pipeline data saved to Parquet, but Supabase sync failed.")
+        
     else:
         logger.warning("No data to consolidate.")
 
     if failed_tickers:
         logger.warning(f"Failed to process tickers: {failed_tickers}")
+    
+    return {
+        'success': len(all_data) > 0,
+        'total_tickers': len(TICKERS),
+        'processed_tickers': len(all_data),
+        'failed_tickers': failed_tickers
+    }
 
 
 if __name__ == "__main__":
     start_time = time.time()
-    main()
-    logger.info(f"Total time taken: {time.time() - start_time:.2f} seconds")
+    
+    # Load environment variables for Supabase
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        logger.warning("python-dotenv not installed. Environment variables must be set manually.")
+    
+    result = main()
+    
+    duration = time.time() - start_time
+    logger.info(f"Total time taken: {duration:.2f} seconds")
+    
+    if result['success']:
+        logger.info("=" * 60)
+        logger.info("PIPELINE EXECUTION SUMMARY")
+        logger.info("=" * 60)
+        logger.info(f"Status: SUCCESS")
+        logger.info(f"Processed: {result['processed_tickers']}/{result['total_tickers']} tickers")
+        if result['failed_tickers']:
+            logger.info(f"Failed: {', '.join(result['failed_tickers'])}")
+        logger.info("=" * 60)
+    else:
+        logger.error("Pipeline failed - no data was processed")
+        sys.exit(1)
+
