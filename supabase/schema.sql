@@ -196,6 +196,25 @@ ANALYZE stock_features;
 -- GRANT ALL ON stock_features TO authenticated;
 
 -- ============================================
+-- Model Health / Drift Monitoring
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS model_health_alerts (
+    id BIGSERIAL PRIMARY KEY,
+    ticker VARCHAR(20) NOT NULL,
+    feature VARCHAR(64) NOT NULL,
+    p_value DOUBLE PRECISION NOT NULL,
+    statistic DOUBLE PRECISION,
+    alpha DOUBLE PRECISION DEFAULT 0.05,
+    baseline_sample_size INTEGER,
+    current_sample_size INTEGER,
+    detected_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_model_health_alerts_ticker_detected
+    ON model_health_alerts (ticker, detected_at DESC);
+
+-- ============================================
 -- Verification Queries
 -- ============================================
 

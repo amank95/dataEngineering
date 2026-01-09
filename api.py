@@ -19,8 +19,9 @@ Usage:
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Optional
+from typing import List, Optional, Any
 from datetime import datetime, timedelta
+from time import time
 import os
 import sys
 from dotenv import load_dotenv
@@ -61,6 +62,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Simple in-process cache for frequently accessed API responses
+_CACHE: dict[str, tuple[Any, float]] = {}
+
+def _make_cache_key(prefix: str, *args, **kwargs) -> str:
+    return f"{prefix}|{args}|{sorted(kwargs.items())}"
+
+def _cache_get(key: str, ttl_seconds: int) -> Any:
+    entry = _CACHE.get(key)
+    if not entry:
+        return None
+    value, ts = entry
+    if time() - ts > ttl_seconds:
+        _CACHE.pop(key, None)
+        return None
+    return value
+
+def _cache_set(key: str, value: Any) -> None:
+    _CACHE[key] = (value, time())
 
 # ============================================
 # Health Checks
@@ -158,18 +178,34 @@ def fetch_parquet_file():
 @app.get("/supabase/training-data")
 def get_training_data(
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
-    end_date: str = Query(..., description="End date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD), defaults to today"),
     tickers: Optional[List[str]] = Query(None, description="Optional list of tickers")
 ):
     """
     Get training data for ML models from Supabase.
     
-    Example: /supabase/training-data?start_date=2024-01-01&end_date=2024-12-31&tickers=RELIANCE.NS&tickers=TCS.NS
+    If end_date is not provided, defaults to today.
+    
+    Example: /supabase/training-data?start_date=2024-01-01
     """
     if not SUPABASE_ENABLED:
         raise HTTPException(status_code=503, detail="Supabase is not configured")
+
+    cache_key = _make_cache_key(
+        "training-data",
+        start_date,
+        end_date or "AUTO",
+        tuple(sorted(tickers)) if tickers else None,
+    )
+    cached = _cache_get(cache_key, ttl_seconds=60)
+    if cached is not None:
+        return cached
     
     try:
+        # Default end_date to today if not provided
+        if not end_date:
+            end_date = datetime.now().strftime('%Y-%m-%d')
+
         query = supabase.table('stock_features')\
             .select('*')\
             .gte('date', start_date)\
@@ -180,11 +216,13 @@ def get_training_data(
         
         response = query.execute()
         
-        return {
+        result = {
             "status": "success",
             "count": len(response.data),
             "data": response.data
         }
+        _cache_set(cache_key, result)
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
 
@@ -201,6 +239,11 @@ def get_ticker_data(
     """
     if not SUPABASE_ENABLED:
         raise HTTPException(status_code=503, detail="Supabase is not configured")
+
+    cache_key = _make_cache_key("ticker-data", ticker, start_date or "NONE", limit or -1)
+    cached = _cache_get(cache_key, ttl_seconds=30)
+    if cached is not None:
+        return cached
     
     try:
         query = supabase.table('stock_features')\
@@ -216,12 +259,14 @@ def get_ticker_data(
         
         response = query.execute()
         
-        return {
+        result = {
             "status": "success",
             "ticker": ticker,
             "count": len(response.data),
             "data": response.data
         }
+        _cache_set(cache_key, result)
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
 
@@ -232,22 +277,59 @@ def get_latest_data(limit: int = Query(10, description="Number of tickers")):
     
     Example: /supabase/latest?limit=20
     """
-    if not SUPABASE_ENABLED:
-        raise HTTPException(status_code=503, detail="Supabase is not configured")
+    cache_key = _make_cache_key("latest", limit)
+    cached = _cache_get(cache_key, ttl_seconds=15)
+    if cached is not None:
+        return cached
+
+    # Prefer Supabase if configured; otherwise or if empty, fall back to local Parquet.
+    supabase_data = []
+    if SUPABASE_ENABLED:
+        try:
+            response = supabase.table('latest_stock_data')\
+                .select('*')\
+                .limit(limit)\
+                .execute()
+            supabase_data = response.data or []
+        except Exception as e:
+            # Log and continue to parquet fallback
+            print(f"[supabase/latest] Supabase query failed, falling back to Parquet: {e}")
     
-    try:
-        response = supabase.table('latest_stock_data')\
-            .select('*')\
-            .limit(limit)\
-            .execute()
-        
-        return {
+    if supabase_data:
+        result = {
             "status": "success",
-            "count": len(response.data),
-            "data": response.data
+            "count": len(supabase_data),
+            "data": supabase_data
         }
+        _cache_set(cache_key, result)
+        return result
+
+    # Fallback: derive latest rows from Parquet output
+    try:
+        import pandas as pd
+        output_file = get_output_file()
+        if not os.path.exists(output_file):
+            raise HTTPException(status_code=404, detail="Processed data not found. Run /run-pipeline first.")
+
+        df = pd.read_parquet(output_file)
+        if 'ticker' not in df.columns or 'date' not in df.columns:
+            raise HTTPException(status_code=500, detail="Parquet file missing required columns (ticker/date).")
+
+        df['date'] = pd.to_datetime(df['date'])
+        latest_per_ticker = df.sort_values('date').groupby('ticker').tail(1)
+        latest_per_ticker = latest_per_ticker.sort_values('date', ascending=False).head(limit)
+
+        result = {
+            "status": "success",
+            "count": len(latest_per_ticker),
+            "data": latest_per_ticker.to_dict(orient='records')
+        }
+        _cache_set(cache_key, result)
+        return result
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Fallback to Parquet failed: {str(e)}")
 
 @app.get("/supabase/recent/{ticker}")
 def get_recent_ticker_data(
@@ -261,6 +343,11 @@ def get_recent_ticker_data(
     """
     if not SUPABASE_ENABLED:
         raise HTTPException(status_code=503, detail="Supabase is not configured")
+
+    cache_key = _make_cache_key("recent", ticker, days)
+    cached = _cache_get(cache_key, ttl_seconds=15)
+    if cached is not None:
+        return cached
     
     try:
         response = supabase.table('stock_features')\
@@ -273,13 +360,15 @@ def get_recent_ticker_data(
         # Reverse to chronological order
         data = list(reversed(response.data))
         
-        return {
+        result = {
             "status": "success",
             "ticker": ticker,
             "days": days,
             "count": len(data),
             "data": data
         }
+        _cache_set(cache_key, result)
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
 
@@ -369,17 +458,23 @@ def search_by_rsi(
 def get_ticker_stats(
     ticker: str,
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
-    end_date: str = Query(..., description="End date (YYYY-MM-DD)")
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD), defaults to today")
 ):
     """
     Get statistical summary for a ticker.
     
-    Example: /supabase/stats/RELIANCE.NS?start_date=2024-01-01&end_date=2024-12-31
+    If end_date is not provided, defaults to today.
+    
+    Example: /supabase/stats/RELIANCE.NS?start_date=2024-01-01
     """
     if not SUPABASE_ENABLED:
         raise HTTPException(status_code=503, detail="Supabase is not configured")
     
     try:
+        # Default end_date to today if not provided
+        if not end_date:
+            end_date = datetime.now().strftime('%Y-%m-%d')
+
         response = supabase.table('stock_features')\
             .select('*')\
             .eq('ticker', ticker)\
@@ -414,6 +509,85 @@ def get_ticker_stats(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Stats calculation failed: {str(e)}")
+
+# ============================================
+# Model Health / Drift Monitoring Endpoints
+# ============================================
+
+@app.get("/supabase/model-health")
+def get_model_health(
+    window_hours: int = Query(24, description="Hours to look back for alerts"),
+    ticker: Optional[str] = Query(None, description="Filter by specific ticker")
+):
+    """
+    Get model health status from drift alerts.
+    
+    Example: /supabase/model-health?window_hours=48&ticker=RELIANCE.NS
+    """
+    if not SUPABASE_ENABLED:
+        raise HTTPException(status_code=503, detail="Supabase is not configured")
+    
+    try:
+        from datetime import timedelta
+        since = (datetime.utcnow() - timedelta(hours=window_hours)).isoformat()
+        
+        query = supabase.table('model_health_alerts')\
+            .select('*')\
+            .gte('detected_at', since)\
+            .order('detected_at', desc=True)
+        
+        if ticker:
+            query = query.eq('ticker', ticker)
+        
+        response = query.limit(100).execute()
+        
+        alerts = response.data or []
+        has_drift = len(alerts) > 0
+        
+        return {
+            "status": "success",
+            "model_health": "drifted" if has_drift else "stable",
+            "has_drift": has_drift,
+            "alert_count": len(alerts),
+            "window_hours": window_hours,
+            "alerts": alerts
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+
+@app.get("/supabase/drift-alerts")
+def get_drift_alerts(
+    ticker: Optional[str] = Query(None, description="Filter by ticker"),
+    feature: Optional[str] = Query(None, description="Filter by feature"),
+    limit: int = Query(50, description="Max number of alerts")
+):
+    """
+    Get detailed drift alerts.
+    
+    Example: /supabase/drift-alerts?ticker=RELIANCE.NS&feature=sma_20
+    """
+    if not SUPABASE_ENABLED:
+        raise HTTPException(status_code=503, detail="Supabase is not configured")
+    
+    try:
+        query = supabase.table('model_health_alerts')\
+            .select('*')\
+            .order('detected_at', desc=True)
+        
+        if ticker:
+            query = query.eq('ticker', ticker)
+        if feature:
+            query = query.eq('feature', feature)
+        
+        response = query.limit(limit).execute()
+        
+        return {
+            "status": "success",
+            "count": len(response.data),
+            "alerts": response.data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
 
 
 if __name__ == "__main__":

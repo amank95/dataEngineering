@@ -266,6 +266,58 @@ def get_data_quality_report(df: pd.DataFrame, ticker: str = "") -> Dict:
     return report
 
 
+
+def check_data_drift(reference_df: pd.DataFrame, current_df: pd.DataFrame, threshold: float = 0.1) -> Dict[str, Dict]:
+    """
+    Checks for data drift between a reference dataset (e.g., historical) and a current dataset.
+    
+    Parameters:
+        reference_df (pd.DataFrame): The baseline/reference dataframe.
+        current_df (pd.DataFrame): The new/current dataframe.
+        threshold (float): Percentage change threshold for mean/std to flag drift (default 0.1 for 10%).
+
+    Returns:
+        dict: Drift report identifying columns with significant drift.
+    """
+    drift_report = {}
+    
+    numeric_cols = reference_df.select_dtypes(include=[np.number]).columns
+    
+    for col in numeric_cols:
+        if col not in current_df.columns:
+            drift_report[col] = {"status": "MISSING", "message": "Column missing in current data"}
+            continue
+            
+        ref_mean = reference_df[col].mean()
+        curr_mean = current_df[col].mean()
+        
+        ref_std = reference_df[col].std()
+        curr_std = current_df[col].std()
+        
+        # Calculate percentage drift
+        # Avoid division by zero
+        mean_drift = abs((curr_mean - ref_mean) / ref_mean) if ref_mean != 0 else float('inf') if curr_mean != 0 else 0
+        std_drift = abs((curr_std - ref_std) / ref_std) if ref_std != 0 else float('inf') if curr_std != 0 else 0
+        
+        col_drift = {
+            "mean_drift": mean_drift,
+            "std_drift": std_drift,
+            "ref_mean": ref_mean,
+            "curr_mean": curr_mean,
+            "drift_detected": False
+        }
+        
+        if mean_drift > threshold:
+            col_drift["drift_detected"] = True
+            col_drift["message"] = f"Mean drift detected: {mean_drift:.2%} change"
+        elif std_drift > threshold:
+            col_drift["drift_detected"] = True
+            col_drift["message"] = f"Std Dev drift detected: {std_drift:.2%} change"
+            
+        drift_report[col] = col_drift
+        
+    return drift_report
+
 if __name__ == "__main__":
     # Test the validation functions
     print("Data Quality Validation Module")
@@ -294,6 +346,20 @@ if __name__ == "__main__":
     # Test quality report
     report = get_data_quality_report(sample_df, "TEST")
     print(f"\nQuality Score: {report['quality_score']:.1f}/100")
+    
+    # Test drift
+    print("\nDrift Test:")
+    drift_df = sample_df.copy()
+    drift_df['open'] = drift_df['open'] * 1.2 # Introduce 20% drift
+    drift = check_data_drift(sample_df, drift_df)
+    if drift['open']['drift_detected']:
+         print(f"✅ Drift detected in Open: {drift['open']['message']}")
+    else:
+         print(f"❌ Failed to detect drift in Open")
+
+
+
+
 
 
 

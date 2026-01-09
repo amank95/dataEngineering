@@ -26,6 +26,8 @@ import pandas as pd
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
+from drift_monitor import run_drift_monitor
+
 # Load environment variables
 load_dotenv()
 
@@ -109,6 +111,15 @@ class SupabaseIngestion:
         # Handle date column - ensure it's in YYYY-MM-DD format
         if 'date' in df_copy.columns:
             df_copy['date'] = pd.to_datetime(df_copy['date']).dt.strftime('%Y-%m-%d')
+
+        # Ensure integer columns match Supabase schema (e.g., volume is BIGINT)
+        # Convert float-like values such as 1286852.0 -> 1286852
+        int_like_cols = ['volume']
+        for col in int_like_cols:
+            if col in df_copy.columns:
+                df_copy[col] = df_copy[col].apply(
+                    lambda v: int(v) if v is not None and pd.notna(v) else None
+                )
         
         # Replace NaN with None for proper NULL handling in Postgres
         df_copy = df_copy.where(pd.notnull(df_copy), None)
@@ -218,7 +229,23 @@ class SupabaseIngestion:
         logger.info(f"Throughput: {summary['records_per_second']:.2f} records/sec")
         logger.info(f"Mode: {'DRY RUN' if dry_run else 'LIVE'}")
         logger.info("=" * 60)
-        
+
+        # Run model-aware drift monitoring after successful live sync
+        if not dry_run and summary["success_count"] > 0:
+            try:
+                logger.info("Starting model-aware feature drift detection...")
+                drift_summary = run_drift_monitor(
+                    parquet_path=parquet_path,
+                    supabase_client=self.client,
+                )
+                logger.info(
+                    f"Drift monitor completed: {drift_summary.get('alerts_created', 0)} alerts, "
+                    f"duration={drift_summary.get('duration_seconds', 0):.2f}s, "
+                    f"status={drift_summary.get('status')}"
+                )
+            except Exception as e:
+                logger.error(f"Drift monitor failed (non-fatal): {e}")
+
         return summary
 
 

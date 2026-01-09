@@ -179,9 +179,51 @@ def clean_data(ticker="AAPL"):
         except Exception as e:
             print(f"⚠️  Could not check data freshness: {e}")
     
+
     # save to csv
     df.to_csv(processed_path)
     print(f"Cleaned data saved to {processed_path}")
+
+def clean_intraday_data(ticker="AAPL", interval="5m"):
+    """
+    Cleans intraday data and saves it to the processed/intraday folder.
+    """
+    config = get_config()
+    raw_dir = os.path.join(config['paths']['raw_data_dir'], "intraday")
+    processed_dir = os.path.join(config['paths']['processed_data_dir'], "intraday")
+    
+    raw_path = f"{raw_dir}/{ticker}_{interval}_raw.csv"
+    os.makedirs(processed_dir, exist_ok=True)
+    processed_path = f"{processed_dir}/{ticker}_{interval}_cleaned.csv"
+    
+    print(f"Cleaning intraday data for {ticker} ({interval})...")
+    
+    try:
+        df = pd.read_csv(raw_path, index_col=0, parse_dates=True)
+    except FileNotFoundError:
+        print(f"Error: File not found at {raw_path}")
+        return
+
+    # Standardize columns
+    df.columns = [col.lower() for col in df.columns]
+    
+    # Ensure index is named 'date' for consistency with daily pipeline
+    df.index.name = 'date'
+    
+    # Drop missing
+    df.dropna(inplace=True)
+    
+    # Ensure all columns are numeric
+    df = df.apply(pd.to_numeric, errors='coerce')
+    df.dropna(inplace=True) # Drop again if numeric conversion created NaNs
+
+    # Basic Quality Check (Min rows)
+    if len(df) < 5:
+        print(f"⚠️  Warning: Very few data points for {ticker} ({len(df)})")
+
+    # Save
+    df.to_csv(processed_path)
+    print(f"Cleaned intraday data saved to {processed_path}")
 
 if __name__ == "__main__":
     clean_data()

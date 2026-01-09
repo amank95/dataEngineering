@@ -30,30 +30,104 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def run_pipeline():
+
+def run_pipeline(intraday=False, interval='5m'):
     """Execute the data pipeline."""
+    mode = f"INTRADAY ({interval})" if intraday else "DAILY"
     logger.info("=" * 70)
-    logger.info("STEP 1: Running Data Pipeline")
+    logger.info(f"STEP 1: Running Data Pipeline - {mode}")
     logger.info("=" * 70)
     
     try:
         # Import and run pipeline
-        from data_pipeline import main as pipeline_main
         from dotenv import load_dotenv
-        
         load_dotenv()
-        result = pipeline_main()
         
-        if result['success']:
-            logger.info(f"✓ Pipeline completed: {result['processed_tickers']}/{result['total_tickers']} tickers processed")
+        if intraday:
+            # Inline intraday orchestration
+            from src.fetch_data import fetch_intraday_data
+            from src.clean_data import clean_intraday_data
+            from src.feature_engineering import generate_intraday_features
+            from config_loader import get_config
+            
+            config = get_config()
+            tickers = config['tickers']
+            
+            # Use limited tickers for intraday to avoid rate limits? Or all?
+            # User request implied all.
+            for ticker in tickers:
+                logger.info(f"Processing {ticker}...")
+                fetch_intraday_data(ticker, interval=interval)
+                clean_intraday_data(ticker, interval=interval)
+                generate_intraday_features(ticker, interval=interval)
+                
+            logger.info("✓ Intraday pipeline completed")
             return True
+            
         else:
-            logger.error("✗ Pipeline failed")
-            return False
+            from data_pipeline import main as pipeline_main
+            result = pipeline_main()
+            
+            if result['success']:
+                logger.info(f"✓ Pipeline completed: {result['processed_tickers']}/{result['total_tickers']} tickers processed")
+                return True
+            else:
+                logger.error("✗ Pipeline failed")
+                return False
             
     except Exception as e:
         logger.error(f"✗ Pipeline execution failed: {e}")
         return False
+
+def check_drift():
+    """Run data drift detection using data quality module."""
+    logger.info("=" * 70)
+    logger.info("STEP 1.5: Checking Data Drift")
+    logger.info("=" * 70)
+    
+    try:
+        from src.data_quality import check_data_drift
+        from config_loader import get_config
+        import pandas as pd
+        
+        config = get_config()
+        processed_dir = config['paths']['processed_data_dir']
+        tickers = config['tickers']
+        
+        # Simple drift check: Compare first ticker's first 50 rows (reference) vs last 50
+        # In real scenario, reference would be a stored "gold standard" or last month's data.
+        # Here we will simulate by splitting current data
+        
+        drift_warnings = 0
+        
+        for ticker in tickers[:5]: # Check first 5 for efficiency
+            file_path = f"{processed_dir}/{ticker}_cleaned.csv"
+            if not os.path.exists(file_path):
+                continue
+                
+            df = pd.read_csv(file_path, index_col=0)
+            if len(df) < 100:
+                continue
+                
+            # Split dataset
+            mid_point = len(df) // 2
+            ref_df = df.iloc[:mid_point]
+            curr_df = df.iloc[mid_point:]
+            
+            drift_report = check_data_drift(ref_df, curr_df)
+            
+            for col, stats in drift_report.items():
+                if stats.get('drift_detected'):
+                    logger.warning(f"⚠ DRIFT DETECTED for {ticker} [{col}]: {stats['message']}")
+                    drift_warnings += 1
+        
+        if drift_warnings == 0:
+            logger.info("✓ No significant data drift detected.")
+        else:
+             logger.info(f"⚠ Detected {drift_warnings} potential drift issues.")
+             
+    except Exception as e:
+        logger.error(f"✗ Drift check failed: {e}")
 
 
 def sync_to_supabase(force=False):
@@ -145,6 +219,21 @@ def main():
         action='store_true',
         help='Skip pipeline execution (useful for testing API/sync only)'
     )
+    parser.add_argument(
+        '--intraday',
+        action='store_true',
+        help='Run pipeline in INTRADAY mode'
+    )
+    parser.add_argument(
+        '--interval',
+        default='5m',
+        help='Intraday interval (default: 5m)'
+    )
+    parser.add_argument(
+        '--check-drift',
+        action='store_true',
+        help='Run data drift detection'
+    )
     
     args = parser.parse_args()
     
@@ -160,7 +249,7 @@ def main():
     
     # Step 1: Run Pipeline
     if not args.skip_pipeline:
-        if not run_pipeline():
+        if not run_pipeline(intraday=args.intraday, interval=args.interval):
             logger.error("\n❌ Pipeline failed. Stopping workflow.")
             sys.exit(1)
         logger.info("")
@@ -168,6 +257,10 @@ def main():
         logger.info("Skipping pipeline execution (--skip-pipeline flag)")
         logger.info("")
     
+    # Step 1.5: Drift Check
+    if args.check_drift and not args.intraday:
+        check_drift()
+
     # Step 2: Sync to Supabase
     if args.sync:
         if not sync_to_supabase(force=True):
