@@ -69,12 +69,12 @@ def load_config(config_path: str = 'config.yaml') -> Dict[str, Any]:
                 if file_config:
                     # Deep merge: update nested dicts properly
                     config = _deep_merge(config, file_config)
-                    print(f"✅ Loaded configuration from {config_path}")
+                    print(f"[OK] Loaded configuration from {config_path}")
         except Exception as e:
-            print(f"⚠️  Warning: Could not load config from {config_path}: {e}")
+            print(f"[WARNING] Could not load config from {config_path}: {e}")
             print(f"   Using default configuration.")
     else:
-        print(f"ℹ️  Config file not found at {config_path}, using defaults.")
+        print(f"[INFO] Config file not found at {config_path}, using defaults.")
     
     return config
 
@@ -147,5 +147,5 @@ if __name__ == "__main__":
     print(f"Tickers: {config['tickers']}")
     print(f"Date Range: {config['dates']['start_date']} to {get_end_date()}")
     print(f"Output File: {config['paths']['output_file']}")
-    print(f"\n💡 End date uses system date: {get_end_date()}")
+    print(f"\n[INFO] End date uses system date: {get_end_date()}")
 

@@ -142,3 +142,17 @@ supabase:
   auto_sync: false  # Set to true to auto-sync after pipeline completion
   # When auto_sync is true, data will be automatically pushed to Supabase
   # after Parquet file is generated
+
+# Dashboard Configuration
+dashboard:
+  default_ticker: "INFY.NS"
+  default_start_date: "2024-01-01"  # Default start date for custom range
+  default_end_date: "today"  # Default end date (can be 'today' or specific date)
+  drift_detection:
+    baseline_window: 30  # days
+    current_window: 7    # days
+    z_score_threshold: 2.0
+  health_thresholds:
+    data_freshness_hours: 1
+    quality_score_min: 80
+    latency_max_seconds: 5

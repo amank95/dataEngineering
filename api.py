@@ -28,8 +28,12 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+def get_pipeline_runner():
+    from data_pipeline import main
+    return main
 
-from data_pipeline import main as run_pipeline
+
+# from data_pipeline import main as run_pipeline
 from config_loader import get_output_file
 
 # Initialize Supabase client (optional)
@@ -48,6 +52,9 @@ except ImportError:
     SUPABASE_ENABLED = False
     supabase = None
 
+# Import MLOps router
+from mlops_api import router as mlops_router
+
 app = FastAPI(
     title="Stock Data Pipeline API",
     description="API for ML team to generate, fetch, and query stock market data",
@@ -63,24 +70,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Simple in-process cache for frequently accessed API responses
-_CACHE: dict[str, tuple[Any, float]] = {}
-
-def _make_cache_key(prefix: str, *args, **kwargs) -> str:
-    return f"{prefix}|{args}|{sorted(kwargs.items())}"
-
-def _cache_get(key: str, ttl_seconds: int) -> Any:
-    entry = _CACHE.get(key)
-    if not entry:
-        return None
-    value, ts = entry
-    if time() - ts > ttl_seconds:
-        _CACHE.pop(key, None)
-        return None
-    return value
-
-def _cache_set(key: str, value: Any) -> None:
-    _CACHE[key] = (value, time())
+# Include MLOps router
+app.include_router(mlops_router)
 
 # ============================================
 # Health Checks
@@ -127,28 +118,46 @@ def health_check():
 # Pipeline Execution
 # ============================================
 
+# @app.post("/run-pipeline")
+# def run_pipeline_endpoint():
+#     """
+#     Execute the complete data pipeline.
+    
+#     This will:
+#     1. Fetch data from Yahoo Finance
+#     2. Clean and validate data
+#     3. Generate technical indicators
+#     4. Save to Parquet
+#     5. (Optional) Sync to Supabase if auto_sync is enabled
+#     """
+#     try:
+#         result = run_pipeline()
+        
+#         return {
+#             "status": "success",
+#             "message": "Data pipeline executed successfully",
+#             "details": result
+#         }
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Pipeline execution failed: {str(e)}")
+
 @app.post("/run-pipeline")
 def run_pipeline_endpoint():
     """
     Execute the complete data pipeline.
-    
-    This will:
-    1. Fetch data from Yahoo Finance
-    2. Clean and validate data
-    3. Generate technical indicators
-    4. Save to Parquet
-    5. (Optional) Sync to Supabase if auto_sync is enabled
     """
     try:
+        run_pipeline = get_pipeline_runner()
         result = run_pipeline()
-        
+
         return {
             "status": "success",
             "message": "Data pipeline executed successfully",
             "details": result
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Pipeline execution failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ============================================
 # Parquet File Access

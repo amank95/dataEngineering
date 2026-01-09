@@ -23,4 +23,8 @@ plotly>=5.18.0
 
 # Optional/Advanced
 # pandas_ta>=0.3.14  # Uncommon technical indicators (Currently causing install issues)
+
+# Dashboard & Visualization
+streamlit>=1.31.0
+plotly>=5.18.0
 scipy>=1.11.0
