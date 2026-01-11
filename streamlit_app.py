@@ -35,81 +35,140 @@ st.set_page_config(
 )
 
 # ============================================
-# Custom CSS - Dark Mode Bloomberg Style
+# Theme Management
 # ============================================
-st.markdown("""
+# Initialize theme in session state
+if 'theme' not in st.session_state:
+    st.session_state.theme = 'dark'
+
+# Define theme colors
+THEMES = {
+    'dark': {
+        'bg_primary': '#0E1117',
+        'bg_secondary': '#1E1E1E',
+        'text_primary': '#FAFAFA',
+        'text_secondary': '#B0B0B0',
+        'accent_green': '#00FF41',
+        'accent_red': '#FF073A',
+        'accent_orange': '#FFA500',
+        'button_bg': '#00FF41',
+        'button_text': '#0E1117',
+        'button_hover': '#00CC33',
+        'plot_bg': '#0E1117',
+        'plot_grid': '#2E2E2E'
+    },
+    'light': {
+        'bg_primary': '#FFFFFF',
+        'bg_secondary': '#F5F5F5',
+        'text_primary': '#1E1E1E',
+        'text_secondary': '#666666',
+        'accent_green': '#00AA33',
+        'accent_red': '#DC3545',
+        'accent_orange': '#FF8C00',
+        'button_bg': '#00AA33',
+        'button_text': '#FFFFFF',
+        'button_hover': '#008825',
+        'plot_bg': '#FFFFFF',
+        'plot_grid': '#E0E0E0'
+    }
+}
+
+# Get current theme colors
+theme = THEMES[st.session_state.theme]
+
+# ============================================
+# Dynamic CSS Based on Theme
+# ============================================
+st.markdown(f"""
 <style>
     /* Main background */
-    .stApp {
-        background-color: #0E1117;
-    }
+    .stApp {{
+        background-color: {theme['bg_primary']};
+    }}
     
     /* Headers */
-    h1, h2, h3 {
-        color: #FAFAFA;
+    h1, h2, h3 {{
+        color: {theme['text_primary']};
         font-weight: 600;
-    }
+    }}
+    
+    /* Text */
+    p, div, span, label {{
+        color: {theme['text_primary']};
+    }}
     
     /* Metric cards */
-    [data-testid="stMetricValue"] {
+    [data-testid="stMetricValue"] {{
         font-size: 28px;
         font-weight: 700;
-    }
+        color: {theme['text_primary']};
+    }}
+    
+    [data-testid="stMetricLabel"] {{
+        color: {theme['text_secondary']};
+    }}
     
     /* Status indicators */
-    .status-healthy {
-        color: #00FF41;
+    .status-healthy {{
+        color: {theme['accent_green']};
         font-weight: bold;
         font-size: 18px;
-    }
+    }}
     
-    .status-unhealthy {
-        color: #FF073A;
+    .status-unhealthy {{
+        color: {theme['accent_red']};
         font-weight: bold;
         font-size: 18px;
-    }
+    }}
     
-    .status-warning {
-        color: #FFA500;
+    .status-warning {{
+        color: {theme['accent_orange']};
         font-weight: bold;
         font-size: 18px;
-    }
+    }}
     
     /* Info boxes */
-    .info-box {
-        background-color: #1E1E1E;
+    .info-box {{
+        background-color: {theme['bg_secondary']};
         padding: 20px;
         border-radius: 10px;
-        border-left: 4px solid #00FF41;
+        border-left: 4px solid {theme['accent_green']};
         margin: 10px 0;
-    }
+        color: {theme['text_primary']};
+    }}
     
-    .warning-box {
-        background-color: #1E1E1E;
+    .warning-box {{
+        background-color: {theme['bg_secondary']};
         padding: 20px;
         border-radius: 10px;
-        border-left: 4px solid #FF073A;
+        border-left: 4px solid {theme['accent_red']};
         margin: 10px 0;
-    }
+        color: {theme['text_primary']};
+    }}
     
     /* Sidebar */
-    [data-testid="stSidebar"] {
-        background-color: #1E1E1E;
-    }
+    [data-testid="stSidebar"] {{
+        background-color: {theme['bg_secondary']};
+    }}
     
     /* Buttons */
-    .stButton>button {
-        background-color: #00FF41;
-        color: #0E1117;
+    .stButton>button {{
+        background-color: {theme['button_bg']};
+        color: {theme['button_text']};
         font-weight: bold;
         border: none;
         padding: 10px 24px;
         border-radius: 5px;
-    }
+    }}
     
-    .stButton>button:hover {
-        background-color: #00CC33;
-    }
+    .stButton>button:hover {{
+        background-color: {theme['button_hover']};
+    }}
+    
+    /* Selectbox and inputs */
+    .stSelectbox, .stDateInput {{
+        color: {theme['text_primary']};
+    }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -125,6 +184,18 @@ health_thresholds = dashboard_config.get('health_thresholds', {})
 # Sidebar - Filters and Controls
 # ============================================
 st.sidebar.header("🎛️ Control Panel")
+
+# Theme toggle
+col1, col2 = st.sidebar.columns([3, 1])
+with col1:
+    st.write("**Theme:**")
+with col2:
+    theme_icon = "🌙" if st.session_state.theme == 'dark' else "☀️"
+    if st.button(theme_icon, key="theme_toggle", use_container_width=True):
+        st.session_state.theme = 'light' if st.session_state.theme == 'dark' else 'dark'
+        st.rerun()
+
+st.sidebar.markdown("---")
 
 # Manual refresh button
 if st.sidebar.button("🔄 Refresh Data", use_container_width=True):
@@ -199,6 +270,12 @@ st.markdown("---")
 
 # ============================================
 # 1. System Health Header
+# This section provides a quick "traffic light" status of the entire MLOps pipeline.
+# It checks:
+# - Data Freshness (time since last update)
+# - Data Quality (null checks, validation scores)
+# - Drift Status (statistical changes)
+# - Execution Status (pipeline runtime)
 # ============================================
 st.subheader("⚡ System Health Status")
 
@@ -297,7 +374,7 @@ if 'error' not in stock_response and stock_response.get('data'):
             x=df['date'],
             y=df['close'],
             name='Close Price',
-            line=dict(color='#00FF41', width=2),
+            line=dict(color=theme['accent_green'], width=2),
             hovertemplate='<b>Date</b>: %{x}<br><b>Price</b>: ₹%{y:.2f}<extra></extra>'
         ),
         row=1, col=1
@@ -309,22 +386,22 @@ if 'error' not in stock_response and stock_response.get('data'):
             x=df['date'],
             y=df['rsi_14'],
             name='RSI (14)',
-            line=dict(color='#FFA500', width=2),
+            line=dict(color=theme['accent_orange'], width=2),
             hovertemplate='<b>Date</b>: %{x}<br><b>RSI</b>: %{y:.2f}<extra></extra>'
         ),
         row=2, col=1
     )
     
     # RSI reference lines
-    fig.add_hline(y=70, line_dash="dash", line_color="red", opacity=0.5, row=2, col=1)
-    fig.add_hline(y=30, line_dash="dash", line_color="green", opacity=0.5, row=2, col=1)
+    fig.add_hline(y=70, line_dash="dash", line_color=theme['accent_red'], opacity=0.5, row=2, col=1)
+    fig.add_hline(y=30, line_dash="dash", line_color=theme['accent_green'], opacity=0.5, row=2, col=1)
     
     # Update layout
     fig.update_layout(
         height=600,
-        plot_bgcolor='#0E1117',
-        paper_bgcolor='#0E1117',
-        font=dict(color='#FAFAFA'),
+        plot_bgcolor=theme['plot_bg'],
+        paper_bgcolor=theme['plot_bg'],
+        font=dict(color=theme['text_primary']),
         hovermode='x unified',
         showlegend=True,
         legend=dict(
@@ -337,21 +414,21 @@ if 'error' not in stock_response and stock_response.get('data'):
     )
     
     fig.update_xaxes(
-        gridcolor='#2E2E2E',
+        gridcolor=theme['plot_grid'],
         showgrid=True,
         title_text="Date",
         row=2, col=1
     )
     
     fig.update_yaxes(
-        gridcolor='#2E2E2E',
+        gridcolor=theme['plot_grid'],
         showgrid=True,
         title_text="Price (₹)",
         row=1, col=1
     )
     
     fig.update_yaxes(
-        gridcolor='#2E2E2E',
+        gridcolor=theme['plot_grid'],
         showgrid=True,
         title_text="RSI",
         row=2, col=1
@@ -502,7 +579,7 @@ if 'error' not in drift_data:
             x=baseline_returns,
             name='Baseline (30d)',
             opacity=0.7,
-            marker_color='#00FF41',
+            marker_color=theme['accent_green'],
             nbinsx=30
         ))
         
@@ -511,7 +588,7 @@ if 'error' not in drift_data:
             x=current_returns,
             name='Current (7d)',
             opacity=0.7,
-            marker_color='#FF073A' if drift_status == 'detected' else '#FFA500',
+            marker_color=theme['accent_red'] if drift_status == 'detected' else theme['accent_orange'],
             nbinsx=30
         ))
         
@@ -520,14 +597,14 @@ if 'error' not in drift_data:
             title='Daily Returns Distribution',
             xaxis_title='Daily Return',
             yaxis_title='Frequency',
-            plot_bgcolor='#0E1117',
-            paper_bgcolor='#0E1117',
-            font=dict(color='#FAFAFA'),
+            plot_bgcolor=theme['plot_bg'],
+            paper_bgcolor=theme['plot_bg'],
+            font=dict(color=theme['text_primary']),
             height=400
         )
         
-        fig_dist.update_xaxes(gridcolor='#2E2E2E', showgrid=True)
-        fig_dist.update_yaxes(gridcolor='#2E2E2E', showgrid=True)
+        fig_dist.update_xaxes(gridcolor=theme['plot_grid'], showgrid=True)
+        fig_dist.update_yaxes(gridcolor=theme['plot_grid'], showgrid=True)
         
         st.plotly_chart(fig_dist, use_container_width=True)
     

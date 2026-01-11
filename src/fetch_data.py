@@ -28,6 +28,7 @@ def fetch_data(ticker="AAPL", start_date="2020-01-01", end_date="2023-01-01"):
     file_path = f"{output_dir}/{ticker}_raw.csv"
 
     # Incremental update: if a raw file already exists, only fetch missing dates
+    # This prevents re-downloading the entire history every day, saving time and bandwidth.
     incremental_start = start_date
     if os.path.exists(file_path):
         try:

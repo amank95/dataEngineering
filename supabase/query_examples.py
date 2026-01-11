@@ -16,7 +16,8 @@ import os
 import pandas as pd
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from supabase import create_client, Client
+from supabase import Client, create_client
+
 
 # Load environment variables
 load_dotenv()

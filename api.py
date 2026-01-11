@@ -28,6 +28,53 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+# ============================================
+# Simple In-Memory Cache
+# ============================================
+# This is a basic caching mechanism to reduce database load for frequent queries.
+# Ideally, in production, use Redis or Memcached.
+# Note: This cache is cleared when the API server restarts.
+_CACHE = {}
+
+def _make_cache_key(*args):
+    """Create a cache key from arguments."""
+    return "|".join(str(arg) for arg in args)
+
+def _cache_get(key: str, ttl_seconds: int = 60):
+    """
+    Get cached value if it exists and hasn't expired.
+    
+    Args:
+        key: Cache key
+        ttl_seconds: Time-to-live in seconds
+    
+    Returns:
+        Cached value or None if expired/not found
+    """
+    if key not in _CACHE:
+        return None
+    
+    cached_time, cached_value = _CACHE[key]
+    age = time() - cached_time
+    
+    if age > ttl_seconds:
+        # Expired, remove from cache
+        del _CACHE[key]
+        return None
+    
+    return cached_value
+
+def _cache_set(key: str, value):
+    """
+    Store value in cache with current timestamp.
+    
+    Args:
+        key: Cache key
+        value: Value to cache
+    """
+    _CACHE[key] = (time(), value)
+
 def get_pipeline_runner():
     from data_pipeline import main
     return main
@@ -95,22 +142,90 @@ def root():
 @app.get("/health")
 def health_check():
     """Comprehensive health check."""
+    output_file = get_output_file()
+    parquet_exists = os.path.exists(output_file)
+    
     health_status = {
         "api": "healthy",
-        "parquet_file_exists": os.path.exists(get_output_file()),
-        "supabase_enabled": SUPABASE_ENABLED
+        "parquet_file_exists": parquet_exists,
+        "supabase_enabled": SUPABASE_ENABLED,
+        "health_score": 0,
+        "data_freshness": {},
+        "pipeline_latency_seconds": 0,
+        "throughput": 0,
+        "total_records": 0,
+        "tickers_processed": 0,
+        "last_update": None
     }
     
-    # Check Supabase connection
+    # Check Supabase connection and get data freshness
     if SUPABASE_ENABLED:
         try:
             # Simple query to test connection
-            response = supabase.table('stock_features').select('ticker').limit(1).execute()
+            response = supabase.table('stock_features').select('ticker,updated_at').limit(1).execute()
             health_status["supabase_connection"] = "healthy"
             health_status["supabase_has_data"] = len(response.data) > 0
+            
+            # Get latest update timestamp
+            if response.data:
+                latest_response = supabase.table('stock_features')\
+                    .select('updated_at')\
+                    .order('updated_at', desc=True)\
+                    .limit(1)\
+                    .execute()
+                
+                if latest_response.data:
+                    last_update_str = latest_response.data[0].get('updated_at')
+                    if last_update_str:
+                        from datetime import datetime, timezone
+                        try:
+                            last_update = datetime.fromisoformat(last_update_str.replace('Z', '+00:00'))
+                            now = datetime.now(timezone.utc)
+                            if last_update.tzinfo is None:
+                                last_update = last_update.replace(tzinfo=timezone.utc)
+                            hours_since = (now - last_update).total_seconds() / 3600
+                            
+                            health_status["data_freshness"] = {
+                                "last_update": last_update_str,
+                                "hours_since_update": round(hours_since, 2)
+                            }
+                            health_status["last_update"] = last_update_str
+                        except:
+                            pass
+            
+            # Get record counts for metrics
+            try:
+                count_response = supabase.table('stock_features')\
+                    .select('ticker', count='exact')\
+                    .execute()
+                health_status["total_records"] = count_response.count if hasattr(count_response, 'count') else 0
+                
+                # Get unique tickers
+                tickers_response = supabase.table('stock_features')\
+                    .select('ticker')\
+                    .execute()
+                unique_tickers = set(row['ticker'] for row in tickers_response.data)
+                health_status["tickers_processed"] = len(unique_tickers)
+            except:
+                pass
+            
+            # Calculate health score
+            score = 50  # Base score
+            if parquet_exists:
+                score += 20
+            if health_status.get("supabase_has_data"):
+                score += 20
+            if health_status.get("data_freshness", {}).get("hours_since_update", 999) < 24:
+                score += 10
+            health_status["health_score"] = min(100, score)
+            
         except Exception as e:
             health_status["supabase_connection"] = f"unhealthy: {str(e)}"
             health_status["supabase_has_data"] = False
+            health_status["health_score"] = 30
+    else:
+        # No Supabase, calculate score from Parquet only
+        health_status["health_score"] = 50 if parquet_exists else 0
     
     return health_status
 
@@ -280,7 +395,7 @@ def get_ticker_data(
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
 
 @app.get("/supabase/latest")
-def get_latest_data(limit: int = Query(10, description="Number of tickers")):
+def get_latest_data(limit: int = Query(20, description="Number of tickers")):
     """
     Get latest data point for each ticker.
     
@@ -384,7 +499,7 @@ def get_recent_ticker_data(
 @app.get("/supabase/top-performers")
 def get_top_performers(
     date: Optional[str] = Query(None, description="Specific date (YYYY-MM-DD), defaults to latest"),
-    top_n: int = Query(10, description="Number of top performers")
+    top_n: int = Query(20, description="Number of top performers")
 ):
     """
     Get top performing stocks by daily return.
@@ -531,7 +646,7 @@ def get_model_health(
     """
     Get model health status from drift alerts.
     
-    Example: /supabase/model-health?window_hours=48&ticker=RELIANCE.NS
+    Example: /supabase/model-health?window_hours=48&ticker=INFY.NS
     """
     if not SUPABASE_ENABLED:
         raise HTTPException(status_code=503, detail="Supabase is not configured")

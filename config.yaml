@@ -156,3 +156,10 @@ dashboard:
     data_freshness_hours: 1
     quality_score_min: 80
     latency_max_seconds: 5
+
+# MLOps Integration
+mlops:
+  # Webhook URL to trigger model retraining (Optional)
+  # Example: "https://jenkins.company.com/job/retrain-model/build"
+  retraining_webhook_url: https://webhook.site/b0ee4c9d-9faa-4e2f-9678-4e51fe8223ef 
+  # Set to a valid URL to enable active notifications

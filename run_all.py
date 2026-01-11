@@ -209,11 +209,13 @@ def main():
         action='store_true',
         help='Force sync to Supabase (even if auto_sync is disabled)'
     )
+    # Useful for re-starting the API without re-running the heavy pipeline
     parser.add_argument(
         '--start-api',
         action='store_true',
         help='Start the API server after pipeline execution'
     )
+    # Use this flag for testing the API or Sync logic without waiting for data processing
     parser.add_argument(
         '--skip-pipeline',
         action='store_true',
@@ -229,6 +231,7 @@ def main():
         default='5m',
         help='Intraday interval (default: 5m)'
     )
+    # Automated data quality check
     parser.add_argument(
         '--check-drift',
         action='store_true',

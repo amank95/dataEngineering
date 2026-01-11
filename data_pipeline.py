@@ -111,6 +111,8 @@ def main():
     failed_tickers = []
 
     # Use ThreadPoolExecutor for parallel processing
+    # This significantly speeds up the pipeline by fetching/processing multiple tickers concurrently.
+    # We limit max_workers to 8 to avoid hitting API rate limits or overwhelming the CPU.
     with ThreadPoolExecutor(max_workers=min(8, len(TICKERS))) as executor:
         future_to_ticker = {executor.submit(process_ticker, ticker): ticker for ticker in TICKERS}
         
@@ -128,6 +130,8 @@ def main():
         master_data = pd.concat(all_data, ignore_index=True)
         
         # Handle duplicate columns (from merge conflicts in data)
+        # This logic mitigates issues where yfinance might return 'Close.1' or similar duplicates,
+        # or if previous merges left artifact columns. We assume the first instance is correct.
         base_cols = {}
         for col in master_data.columns:
             base = col.split('.')[0]
@@ -135,7 +139,9 @@ def main():
         
         for base, cols in base_cols.items():
             if len(cols) > 1:
+                # Fill missing values in the base column from the duplicate columns
                 master_data[base] = master_data[cols].bfill(axis=1).iloc[:, 0]
+                # Drop the redundant columns to keep the schema clean
                 master_data.drop(columns=[c for c in cols if c != base], inplace=True)
         
         # Save to Parquet

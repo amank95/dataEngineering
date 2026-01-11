@@ -27,6 +27,9 @@ from src.data_quality import get_data_quality_report
 router = APIRouter(prefix="/api/mlops", tags=["MLOps"])
 
 # Global variable to store pipeline metrics (updated by data_pipeline.py)
+# Note: Using a global variable is a simple way to share state in a single-process application.
+# multiple-worker deployment (e.g., Gunicorn with multiple workers) would require a
+# shared database (like Redis) to persist these metrics across processes.
 PIPELINE_METRICS = {
     "last_execution": None,
     "total_rows": 0,

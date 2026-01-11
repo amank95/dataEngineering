@@ -148,6 +148,8 @@ class SupabaseIngestion:
         
         try:
             # Supabase upsert - will insert or update based on primary key (ticker, date)
+            # Batching reduces the number of network round-trips and significantly improves performance
+            # when dealing with large datasets (thousands of rows).
             response = self.client.table(TABLE_NAME).upsert(
                 records,
                 on_conflict='ticker,date'  # Composite primary key

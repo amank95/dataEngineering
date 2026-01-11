@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import List, Dict, Any, Optional
 import os
 import logging
+import requests
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -180,11 +181,50 @@ def run_drift_monitor(
     duration = (datetime.utcnow() - start).total_seconds()
     logger.info(f"Drift monitor finished in {duration:.2f}s. Alerts created: {alerts_created}")
 
+    # Active Notification: Trigger logic for ML Team
+    if alerts_created > 0:
+        trigger_retraining_webhook(alerts)
+
     return {
         "alerts_created": alerts_created,
         "status": "ok",
         "duration_seconds": duration,
     }
+
+
+def trigger_retraining_webhook(alerts: List[Dict[str, Any]]):
+    """
+    Sends a webhook notification to the ML team's system (e.g., Jenkins, Airflow).
+    """
+    try:
+        # Load config to get the webhook URL
+        # We do this here to avoid circular imports if possible, or just use simple env vars/config loading
+        from config_loader import get_config
+        config = get_config()
+        webhook_url = config.get('mlops', {}).get('retraining_webhook_url')
+        
+        if not webhook_url:
+            logger.info("No 'retraining_webhook_url' configured. Skipping active notification.")
+            return
+
+        logger.info(f"Triggering ML retraining webhook at {webhook_url}...")
+        
+        payload = {
+            "event": "drift_detected",
+            "timestamp": datetime.utcnow().isoformat(),
+            "alert_count": len(alerts),
+            "alerts": alerts
+        }
+        
+        response = requests.post(webhook_url, json=payload, timeout=5)
+        
+        if response.status_code == 200:
+            logger.info("✅ Successfully triggered retraining webhook.")
+        else:
+            logger.error(f"❌ Failed to trigger webhook. Status: {response.status_code}, Response: {response.text}")
+            
+    except Exception as e:
+        logger.error(f"Failed to send webhook notification: {e}")
 
 
 
