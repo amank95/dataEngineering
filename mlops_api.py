@@ -351,10 +351,3 @@ def get_drift_detection(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Drift detection failed: {str(e)}")
-
-
-if __name__ == "__main__":
-    print("MLOps API Module")
-    print("=" * 50)
-    print("This module provides MLOps endpoints for the dashboard.")
-    print("Mount this router in api.py to use.")

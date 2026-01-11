@@ -160,3 +160,26 @@ MENTOR_BRIEFING.md
 notebooks/
 
 
+
+# Generated Documentation / Artifacts (Not required for code execution)
+PROJECT_EXPLANATION.md
+DATA_INGESTION_AND_API_FLOW.md
+SYSTEM_ARCHITECTURE_DATA_ENGINEERING.md
+DRIFT_COLOR_ISSUE_ANALYSIS.md
+ML_TEAM_API_REFERENCE.md
+API_ENDPOINTS_FOR_ML_TEAM.md
+API_ENDPOINTS_FOR_DASHBOARD.md
+DASHBOARD_API_ENDPOINTS.md
+
+# Tool specific
+.qodo/
+
+# Logs (Active run logs)
+pipeline.log
+scheduler.log
+supabase_ingestion.log
+
+# Dashboard Source Code (UI Layer)
+streamlit_app.py
+dashboard_utils.py
+start_dashboard.bat

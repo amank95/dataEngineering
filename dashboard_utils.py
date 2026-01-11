@@ -392,19 +392,3 @@ def format_metric_value(value: float, unit: str = "", decimals: int = 2) -> str:
         formatted = f"{value:.{decimals}f}"
         return f"{formatted} {unit}".strip()
     return str(value)
-
-
-if __name__ == "__main__":
-    print("Dashboard Utilities Module")
-    print("=" * 50)
-    print("Testing API connections...")
-    
-    # Test system health
-    health = fetch_system_health()
-    print(f"\nSystem Health: {health.get('overall_health_score', 0)}/100")
-    
-    # Test pipeline metrics
-    metrics = fetch_pipeline_metrics()
-    print(f"Pipeline Latency: {metrics.get('latency_seconds', 0)}s")
-    
-    print("\nUtilities module loaded successfully!")

@@ -41,7 +41,7 @@ def _make_cache_key(*args):
     """Create a cache key from arguments."""
     return "|".join(str(arg) for arg in args)
 
-def _cache_get(key: str, ttl_seconds: int = 60):
+def _cache_get(key: str, ttl_seconds: int = 30):
     """
     Get cached value if it exists and hasn't expired.
     
@@ -232,29 +232,6 @@ def health_check():
 # ============================================
 # Pipeline Execution
 # ============================================
-
-# @app.post("/run-pipeline")
-# def run_pipeline_endpoint():
-#     """
-#     Execute the complete data pipeline.
-    
-#     This will:
-#     1. Fetch data from Yahoo Finance
-#     2. Clean and validate data
-#     3. Generate technical indicators
-#     4. Save to Parquet
-#     5. (Optional) Sync to Supabase if auto_sync is enabled
-#     """
-#     try:
-#         result = run_pipeline()
-        
-#         return {
-#             "status": "success",
-#             "message": "Data pipeline executed successfully",
-#             "details": result
-#         }
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Pipeline execution failed: {str(e)}")
 
 @app.post("/run-pipeline")
 def run_pipeline_endpoint():
@@ -713,7 +690,3 @@ def get_drift_alerts(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
 
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
