@@ -156,3 +156,87 @@ dashboard:
     data_freshness_hours: 1
     quality_score_min: 80
     latency_max_seconds: 5
+
+# ============================================================
+# Drift Detection Configuration (Enhanced)
+# ============================================================
+drift_detection:
+  enabled: true
+  check_interval_hours: 6  # How often to run drift detection
+  
+  # Detection methods
+  methods:
+    - ks_test  # Kolmogorov-Smirnov test
+    - psi      # Population Stability Index
+  
+  # Default thresholds (can be overridden per ticker)
+  default_alpha: 0.05          # KS-test significance level
+  default_psi_threshold: 0.2   # PSI threshold (0.2 = significant drift)
+  
+  # Features to monitor
+  monitored_features:
+    - sma_20
+    - sma_50
+    - rsi_14
+    - macd
+    - volatility
+    - daily_return
+  
+  # Per-ticker overrides (optional)
+  ticker_overrides:
+    INFY.NS:
+      auto_retrain: false        # Enable auto-retraining for this ticker
+      requires_approval: false   # No approval needed
+      drift_threshold: 0.03      # More sensitive threshold
+      psi_threshold: 0.15
+    TCS.NS:
+      auto_retrain: false
+      requires_approval: true    # Critical ticker - needs approval
+      drift_threshold: 0.05
+      is_critical: true
+
+# ============================================================
+# Slack Integration
+# ============================================================
+slack:
+  enabled: false  # Set to true when you have webhook URL
+  webhook_url: ${SLACK_WEBHOOK_URL}  # Load from .env file
+  channel: "#ml-alerts"
+  mention_on_critical: "@ml-team"  # Mention team on critical drift
+  rate_limit_minutes: 5  # Minimum minutes between alerts for same ticker
+
+# ============================================================
+# ML Team API Integration
+# ============================================================
+ml_api:
+  enabled: false  # Set to true when ML API is ready
+  base_url: ${ML_API_BASE_URL}  # Load from .env (e.g., http://ml-api.example.com)
+  api_key: ${ML_API_KEY}  # Load from .env
+  retrain_endpoint: "/retrain/{ticker}"  # Endpoint format
+  timeout_seconds: 10
+  max_retries: 3
+  circuit_breaker_threshold: 5  # Open circuit after 5 failures
+
+# ============================================================
+# Auto-Retraining Configuration
+# ============================================================
+retraining:
+  # SAFETY: Auto-retraining disabled by default
+  default_enabled: false
+  
+  # Rate limiting
+  min_interval_hours: 6  # Minimum hours between retraining same ticker
+  
+  # Approval mode
+  approval_mode: false  # If true, all retraining requires approval
+  
+  # Critical tickers (always require approval, regardless of approval_mode)
+  critical_tickers:
+    - TCS.NS
+    - RELIANCE.NS
+    - HDFCBANK.NS
+    - SBIN.NS
+  
+  # Severity-based auto-retrain (only retrain on HIGH or CRITICAL drift)
+  min_severity_for_auto_retrain: "MEDIUM"  # Options: LOW, MEDIUM, HIGH, CRITICAL
+

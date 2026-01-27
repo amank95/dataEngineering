@@ -108,6 +108,10 @@ class SupabaseIngestion:
         df_copy = df.copy()
         df_copy.columns = [col.lower() for col in df_copy.columns]
         
+        # Rename 'adj close' to 'adj_close' to match Supabase schema best practices
+        if 'adj close' in df_copy.columns:
+            df_copy.rename(columns={'adj close': 'adj_close'}, inplace=True)
+        
         # Handle date column - ensure it's in YYYY-MM-DD format
         if 'date' in df_copy.columns:
             df_copy['date'] = pd.to_datetime(df_copy['date']).dt.strftime('%Y-%m-%d')
@@ -233,13 +237,27 @@ class SupabaseIngestion:
         # Run model-aware drift monitoring after successful live sync
         if not dry_run and summary["success_count"] > 0:
             try:
+                from config_loader import get_config
+                config = get_config()
+                drift_config = config.get("drift_detection", {})
+                retrain_config = config.get("retraining", {})
+                
                 logger.info("Starting model-aware feature drift detection...")
                 drift_summary = run_drift_monitor(
                     parquet_path=parquet_path,
                     supabase_client=self.client,
+                    alpha=drift_config.get("default_alpha", 0.05),
+                    psi_threshold=drift_config.get("default_psi_threshold", 0.2),
+                    enable_slack=config.get("slack", {}).get("enabled", False),
+                    enable_auto_retrain=retrain_config.get("default_enabled", False),
+                    min_retrain_interval_hours=retrain_config.get("min_interval_hours", 6),
+                    features=drift_config.get("monitored_features"),
                 )
+                
                 logger.info(
-                    f"Drift monitor completed: {drift_summary.get('alerts_created', 0)} alerts, "
+                    f"Drift monitor completed: "
+                    f"{drift_summary.get('alerts_created', 0)} alerts, "
+                    f"{drift_summary.get('retraining_triggered', 0)} retrainings, "
                     f"duration={drift_summary.get('duration_seconds', 0):.2f}s, "
                     f"status={drift_summary.get('status')}"
                 )

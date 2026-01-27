@@ -26,6 +26,14 @@ from src.data_quality import get_data_quality_report
 # Initialize router
 router = APIRouter(prefix="/api/mlops", tags=["MLOps"])
 
+# Import new integrations
+try:
+    from src.retraining_trigger import get_retraining_trigger
+    INTEGRATIONS_AVAILABLE = True
+except ImportError:
+    INTEGRATIONS_AVAILABLE = False
+
+
 # Global variable to store pipeline metrics (updated by data_pipeline.py)
 PIPELINE_METRICS = {
     "last_execution": None,
@@ -211,16 +219,16 @@ def get_data_quality(ticker: str):
         total_nulls = sum(quality_report['missing_values'].values())
         null_percentage = round((total_nulls / total_cells) * 100, 2) if total_cells > 0 else 0
         
-        # Format response
+        # Format response (convert numpy types to Python native types for JSON serialization)
         result = {
             "timestamp": datetime.now().isoformat(),
             "ticker": ticker,
-            "null_percentage": null_percentage,
-            "quality_score": round(quality_report['quality_score'], 2),
-            "ohlc_validation": quality_report['ohlc_validation'],
-            "outlier_count": sum(quality_report['outliers'].values()),
+            "null_percentage": float(null_percentage),
+            "quality_score": float(round(quality_report['quality_score'], 2)),
+            "ohlc_validation": str(quality_report['ohlc_validation']),
+            "outlier_count": int(sum(quality_report['outliers'].values())),
             "schema_validation": "pass" if quality_report['quality_score'] > 80 else "fail",
-            "total_rows_analyzed": len(df)
+            "total_rows_analyzed": int(len(df))
         }
         
         return result
@@ -349,6 +357,166 @@ def get_drift_detection(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Drift detection failed: {str(e)}")
 
+@router.get("/drift-alerts/{ticker}")
+def get_drift_alerts(ticker: str, limit: int = 10):
+    """
+    Get recent drift alerts for a specific ticker.
+    """
+    try:
+        from supabase import create_client
+        SUPABASE_URL = os.getenv('SUPABASE_URL')
+        SUPABASE_KEY = os.getenv('SUPABASE_KEY')
+        
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            raise HTTPException(status_code=503, detail="Supabase not configured")
+        
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        
+        # Fetch alerts
+        response = supabase.table('model_health_alerts')\
+            .select('*')\
+            .eq('ticker', ticker)\
+            .order('detected_at', desc=True)\
+            .limit(limit)\
+            .execute()
+            
+        return {
+            "ticker": ticker,
+            "alerts": response.data,
+            "count": len(response.data)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/training-data/{ticker}")
+def get_training_data(ticker: str, days: int = 90):
+    """
+    Get fresh training data for ML model retraining.
+    Returns cleaned data suitable for training (OHLCV + features).
+    """
+    try:
+        from supabase import create_client
+        SUPABASE_URL = os.getenv('SUPABASE_URL')
+        SUPABASE_KEY = os.getenv('SUPABASE_KEY')
+        
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            raise HTTPException(status_code=503, detail="Supabase not configured")
+        
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        
+        # Calculate start date
+        start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+        
+        # Fetch data
+        response = supabase.table('stock_features')\
+            .select('*')\
+            .eq('ticker', ticker)\
+            .gte('date', start_date)\
+            .order('date', ascending=True)\
+            .execute()
+            
+        if not response.data:
+            raise HTTPException(status_code=404, detail="No training data found")
+            
+        return {
+            "ticker": ticker,
+            "data_count": len(response.data),
+            "start_date": start_date,
+            "end_date": datetime.now().strftime('%Y-%m-%d'),
+            "data": response.data
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/acknowledge-drift/{ticker}")
+def acknowledge_drift(ticker: str, acknowledged_by: str = "auto_system"):
+    """
+    Acknowledge most recent drift alerts for a ticker.
+    Prevents duplicate alerts from being treated as new issues.
+    """
+    try:
+        from supabase import create_client
+        SUPABASE_URL = os.getenv('SUPABASE_URL')
+        SUPABASE_KEY = os.getenv('SUPABASE_KEY')
+        
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        
+        # Update unacknowledged alerts
+        current_time = datetime.utcnow().isoformat()
+        
+        response = supabase.table('model_health_alerts')\
+            .update({
+                "acknowledged": True,
+                "acknowledged_by": acknowledged_by,
+                "acknowledged_at": current_time
+            })\
+            .eq('ticker', ticker)\
+            .eq('acknowledged', False)\
+            .execute()
+            
+        return {
+            "status": "success",
+            "message": f"Acknowledged drift alerts for {ticker}",
+            "updated_count": len(response.data) if response.data else 0
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/retraining-history/{ticker}")
+def get_retraining_history(ticker: str, limit: int = 20):
+    """
+    Get history of retraining jobs for a ticker.
+    """
+    try:
+        from supabase import create_client
+        supabase = create_client(os.getenv('SUPABASE_URL'), os.getenv('SUPABASE_KEY'))
+        
+        response = supabase.table('retraining_jobs')\
+            .select('*')\
+            .eq('ticker', ticker)\
+            .order('triggered_at', desc=True)\
+            .limit(limit)\
+            .execute()
+            
+        return {
+            "ticker": ticker,
+            "history": response.data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/trigger-retrain/{ticker}")
+def manual_trigger_retrain(ticker: str, reason: str = "manual_api_request"):
+    """
+    Manually trigger retraining for a ticker.
+    Bypasses drift check but respects circuit breaker/rate limits.
+    """
+    if not INTEGRATIONS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Retraining integration not available")
+        
+    try:
+        from supabase import create_client
+        supabase = create_client(os.getenv('SUPABASE_URL'), os.getenv('SUPABASE_KEY'))
+        
+        trigger = get_retraining_trigger()
+        
+        # Manual trigger
+        result = trigger.trigger_retraining(
+            ticker=ticker,
+            drift_severity="MANUAL",
+            drift_results={"manual_trigger": True, "reason": reason},
+            supabase_client=supabase
+        )
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     print("MLOps API Module")

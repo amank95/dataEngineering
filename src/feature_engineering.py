@@ -22,7 +22,7 @@ except ImportError:
             }
         }
 
-def generate_features(ticker="AAPL"):
+def generate_features(ticker="INFY.NS"):
     """
     Loads cleaned data, adds technical indicators, and saves the final dataset.
     
@@ -88,7 +88,7 @@ def generate_features(ticker="AAPL"):
     df.to_csv(output_path)
     print(f"Feature-engineered data saved to {output_path}")
 
-def generate_intraday_features(ticker="AAPL", interval="5m"):
+def generate_intraday_features(ticker="INFY.NS", interval="5m"):
     """
     Generates features for intraday data.
     """

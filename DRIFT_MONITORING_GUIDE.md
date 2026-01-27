@@ -1,200 +1,82 @@
-# Model-Aware Feature Store: Drift Detection Guide
+# Drift Monitoring & Auto-Retraining Guide
 
 ## Overview
+The enhanced drift monitoring system now includes:
+1.  **Multi-Method Detection**: Uses both **KS-Test** (for distribution shape) and **PSI** (Population Stability Index) to robustly detect drift.
+2.  **Severity Classification**: Drift is classified as `LOW`, `MEDIUM`, `HIGH`, or `CRITICAL`.
+3.  **Unified Drift Score**: A single 0-1 score combining KS and PSI metrics.
+4.  **Auto-Retraining**: Automatically triggers the ML team's API when significant drift occurs (configurable).
+5.  **Safety Features**: Rate limiting (e.g., max 1 retrain per 6 hours), Circuit Breaker, and Manual Approval mode for critical tickers.
+6.  **Slack Integration**: Real-time alerts for drift events, approval requests, and retraining confirmations.
 
-Your pipeline now includes **automatic data drift detection** that compares live data against a training baseline using statistical tests (Kolmogorov-Smirnov). When drift is detected, alerts are automatically written to Supabase.
+## Configuration (`config.yaml`)
 
-## What Was Implemented
+### Drift Detection
+```yaml
+drift_detection:
+  enabled: true
+  check_interval_hours: 6
+  methods:
+    - ks_test
+    - psi
+  default_alpha: 0.05
+  default_psi_threshold: 0.2
+  monitored_features: ["sma_20", "rsi_14", "volatility", "daily_return", "macd"]
+```
 
-### 1. **Drift Monitor Module** (`drift_monitor.py`)
-- Compares baseline vs current data using KS-2samp test
-- Monitors key features: `sma_20`, `rsi_14`, `volatility`
-- Detects drift when p-value < 0.05 (configurable)
-- Writes alerts to `model_health_alerts` Supabase table
+### Auto-Retraining
+```yaml
+retraining:
+  default_enabled: false
+  min_interval_hours: 6
+  critical_tickers: ["TCS.NS", "RELIANCE.NS"]
+  min_severity_for_auto_retrain: "MEDIUM"
+```
 
-### 2. **Database Schema** (`supabase/schema.sql`)
-- New table: `model_health_alerts`
-- Stores: ticker, feature, p-value, statistic, sample sizes, timestamp
-- Indexed for fast queries by ticker and detection time
+## API Endpoints (MLOps)
 
-### 3. **Pipeline Integration** (`supabase_ingestion.py`)
-- Drift monitoring runs **automatically** after successful Supabase sync
-- Non-blocking: failures don't stop the pipeline
-- Logs drift detection results
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/api/mlops/drift-alerts/{ticker}` | GET | Fetch recent drift alerts for a ticker |
+| `/api/mlops/training-data/{ticker}` | GET | Get fresh training data (last N days) |
+| `/api/mlops/trigger-retrain/{ticker}` | POST | Manually trigger retraining (bypasses drift check) |
+| `/api/mlops/acknowledge-drift/{ticker}` | POST | Acknowledge alerts (stops repeating them) |
+| `/api/mlops/retraining-history/{ticker}` | GET | History of retraining jobs and statuses |
 
-### 4. **Dashboard Integration** (`dashboard.py`)
-- **New "Model Health" metric** in Overview tab (5th column)
-- Shows "Stable" (green) or "Drift Detected" (red)
-- Queries `model_health_alerts` table for last 24 hours
+## Operational Workflows
 
-### 5. **API Endpoints** (`api.py`)
-- `GET /supabase/model-health` - Get overall health status
-- `GET /supabase/drift-alerts` - Get detailed drift alerts
+### 1. Handling a CRITICAL Drift Alert
+1.  **Slack Alert Received**: "CRITICAL drift detected for TCS.NS. Manual approval required."
+2.  **Investigate**: Check dashboard or `/api/mlops/drift-detection/TCS.NS` to see which features drifted.
+3.  **Approve Retraining**:
+    *   Call: `POST /api/mlops/trigger-retrain/TCS.NS?reason=approved_via_slack`
+    *   The system checks the Circuit Breaker and triggers the ML job.
+4.  **Confirmation**: Slack message confirms "Retraining job started (Job ID: ...)"
 
-## Setup Instructions
+### 2. Auto-Retraining Flow (Non-Critical Tickers)
+1.  **Drift Detected**: System detects MEDIUM drift for INFY.NS.
+2.  **Auto-Trigger**: System checks:
+    *   Is auto-retrain enabled? (Yes)
+    *   Is rate limit passed? (Yes, > 6 hours since last job)
+    *   Is Circuit Breaker closed? (Yes, ML API is healthy)
+3.  **Action**: Calls ML API `/retrain/INFY.NS`.
+4.  **Logging**: Records job in `retraining_jobs` table and sends Slack notification.
 
-### Step 1: Create Baseline Dataset
+## Maintenance
 
-**IMPORTANT:** You need a baseline file before drift detection can work!
-
+### Updating Baseline
+Periodically (e.g., monthly), the baseline should be updated to reflect the new "normal" data distribution.
 ```bash
-# Option 1: Use current processed data as baseline
 python create_baseline.py
-
-# Option 2: Specify custom source/output
-python create_baseline.py --source data/processed/features_dataset.parquet --output data/processed/baseline_features.parquet
 ```
 
-This creates `data/processed/baseline_features.parquet` which represents your "training phase" distribution.
-
-### Step 2: Apply Database Schema
-
-Run the updated schema in your Supabase project:
-
-```sql
--- Run this in Supabase SQL Editor
-CREATE TABLE IF NOT EXISTS model_health_alerts (
-    id BIGSERIAL PRIMARY KEY,
-    ticker VARCHAR(20) NOT NULL,
-    feature VARCHAR(64) NOT NULL,
-    p_value DOUBLE PRECISION NOT NULL,
-    statistic DOUBLE PRECISION,
-    alpha DOUBLE PRECISION DEFAULT 0.05,
-    baseline_sample_size INTEGER,
-    current_sample_size INTEGER,
-    detected_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_model_health_alerts_ticker_detected
-    ON model_health_alerts (ticker, detected_at DESC);
-```
-
-Or use the full schema file:
+### Checking System Health
+Run the verification script to ensure all components (Slack, DB, Config) are connected:
 ```bash
-# Copy and paste contents of supabase/schema.sql into Supabase SQL Editor
+python verify_drift_setup.py
 ```
 
-### Step 3: Install Dependencies
-
-```bash
-pip install scipy>=1.11.0
-```
-
-(Already added to `requirements.txt`)
-
-### Step 4: Run Pipeline
-
-The drift monitor runs automatically after Supabase sync:
-
-```bash
-python run_all.py --sync
-```
-
-Or just run the pipeline (if auto_sync is enabled in config.yaml):
-```bash
-python data_pipeline.py
-```
-
-## How It Works
-
-1. **Baseline Phase**: You create a baseline from your training data
-2. **Live Phase**: Pipeline runs and syncs to Supabase
-3. **Drift Detection**: After sync, `drift_monitor.py` compares:
-   - Baseline distribution (from `baseline_features.parquet`)
-   - Current distribution (from latest `features_dataset.parquet`)
-4. **Alert Generation**: If p-value < 0.05 for any feature, creates alert in Supabase
-5. **Dashboard Display**: Dashboard queries alerts and shows health status
-
-## Viewing Results
-
-### Dashboard
-1. Open Streamlit dashboard: `streamlit run dashboard.py`
-2. Go to **📈 Overview** tab
-3. Check the **5th metric card**: "Model Health"
-   - **Green "Stable"** = No drift detected in last 24 hours
-   - **Red "Drift Detected"** = Drift alerts found
-
-### API
-```bash
-# Get overall health status
-curl http://127.0.0.1:8000/supabase/model-health
-
-# Get detailed alerts
-curl http://127.0.0.1:8000/supabase/drift-alerts
-
-# Filter by ticker
-curl "http://127.0.0.1:8000/supabase/drift-alerts?ticker=RELIANCE.NS"
-```
-
-### Supabase
-Query the table directly:
-```sql
-SELECT * FROM model_health_alerts 
-ORDER BY detected_at DESC 
-LIMIT 10;
-```
-
-## Configuration
-
-### Environment Variables
-```bash
-# Optional: Custom baseline path
-DRIFT_BASELINE_PATH=data/processed/baseline_features.parquet
-```
-
-### Code Configuration
-Edit `drift_monitor.py`:
-- `DEFAULT_FEATURES`: Features to monitor (default: `["sma_20", "rsi_14", "volatility"]`)
-- `alpha`: Significance threshold (default: `0.05`)
-
-## Troubleshooting
-
-### "Baseline file not found"
-**Solution**: Run `python create_baseline.py` first
-
-### "Model Health shows Unknown"
-**Solution**: 
-- Check Supabase credentials in `.env`
-- Verify `model_health_alerts` table exists
-- Check dashboard logs for errors
-
-### "No drift detected but should be"
-**Solution**:
-- Verify baseline file is from training phase (not current data)
-- Check p-value threshold (default 0.05)
-- Ensure sufficient sample sizes in both baseline and current data
-
-### Performance Impact
-- Drift detection adds ~1-3 seconds to pipeline (after sync)
-- Uses efficient sampling (max 1000 rows per ticker)
-- Non-blocking: failures don't stop pipeline
-
-## Next Steps
-
-1. **Create baseline** from your training data
-2. **Run pipeline** to see drift detection in action
-3. **Check dashboard** for Model Health status
-4. **Query API** for detailed alerts
-5. **Set up alerts** (email/Slack) based on `model_health_alerts` table
-
-## Files Modified/Created
-
-- ✅ `drift_monitor.py` - New drift detection module
-- ✅ `supabase/schema.sql` - Added `model_health_alerts` table
-- ✅ `supabase_ingestion.py` - Integrated drift monitor after sync
-- ✅ `dashboard.py` - Added Model Health metric
-- ✅ `api.py` - Added drift monitoring endpoints
-- ✅ `create_baseline.py` - Helper script to create baseline
-- ✅ `requirements.txt` - Added scipy dependency
-
-## Summary
-
-Your pipeline is now a **Model-Aware Feature Store** that:
-- ✅ Automatically detects data drift
-- ✅ Stores alerts in Supabase
-- ✅ Displays health status in dashboard
-- ✅ Provides API access to drift information
-- ✅ Runs non-intrusively (doesn't slow down pipeline)
-
-**Next**: Create your baseline and run the pipeline to see it in action!
-
+### Database Schema
+Two new tables manage this system:
+*   `ticker_config`: Per-ticker settings (drift thresholds, auto-retrain flags).
+*   `retraining_jobs`: Log of all retraining attempts and their outcomes.

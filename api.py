@@ -55,6 +55,33 @@ except ImportError:
 # Import MLOps router
 from mlops_api import router as mlops_router
 
+# ============================================
+# Simple In-Memory Cache
+# ============================================
+_CACHE = {}
+
+def _make_cache_key(*args):
+    """Create a cache key from arguments."""
+    return ":".join(str(arg) for arg in args if arg is not None)
+
+def _cache_get(key: str, ttl_seconds: int = 60):
+    """Get value from cache if not expired."""
+    if key in _CACHE:
+        value, timestamp = _CACHE[key]
+        if (time() - timestamp) < ttl_seconds:
+            return value
+        else:
+            del _CACHE[key]
+    return None
+
+def _cache_set(key: str, value: Any):
+    """Set value in cache with timestamp."""
+    _CACHE[key] = (value, time())
+
+# ============================================
+# FastAPI App
+# ============================================
+
 app = FastAPI(
     title="Stock Data Pipeline API",
     description="API for ML team to generate, fetch, and query stock market data",

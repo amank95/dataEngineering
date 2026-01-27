@@ -3,6 +3,7 @@ pandas>=2.0.0
 numpy>=1.24.0
 pyarrow>=14.0.0
 PyYAML>=6.0.0
+scipy>=1.11.0
 
 # Data Fetching
 yfinance>=0.2.30
@@ -18,13 +19,8 @@ supabase>=2.3.0
 python-dotenv>=1.0.0
 
 # Dashboard & Visualization
-streamlit>=1.30.0
+streamlit>=1.31.0
 plotly>=5.18.0
 
 # Optional/Advanced
 # pandas_ta>=0.3.14  # Uncommon technical indicators (Currently causing install issues)
-
-# Dashboard & Visualization
-streamlit>=1.31.0
-plotly>=5.18.0
-scipy>=1.11.0

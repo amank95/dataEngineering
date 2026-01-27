@@ -14,7 +14,7 @@ from pathlib import Path
 def check_file_exists(path: str, description: str) -> tuple[bool, str]:
     """Check if a file exists."""
     exists = os.path.exists(path)
-    status = "✓" if exists else "✗"
+    status = "[OK]" if exists else "[FAIL]"
     return exists, f"{status} {description}: {path}"
 
 def check_env_var(name: str) -> tuple[bool, str]:
@@ -23,7 +23,7 @@ def check_env_var(name: str) -> tuple[bool, str]:
     load_dotenv()
     value = os.getenv(name)
     exists = value is not None and value != ""
-    status = "✓" if exists else "✗"
+    status = "[OK]" if exists else "[FAIL]"
     return exists, f"{status} {name}: {'Set' if exists else 'Not set'}"
 
 def check_table_exists() -> tuple[bool, str]:
@@ -37,14 +37,14 @@ def check_table_exists() -> tuple[bool, str]:
         supabase_key = os.getenv('SUPABASE_KEY')
         
         if not supabase_url or not supabase_key:
-            return False, "✗ Supabase credentials not configured"
+            return False, "[FAIL] Supabase credentials not configured"
         
         client = create_client(supabase_url, supabase_key)
         # Try to query the table
         response = client.table('model_health_alerts').select('id').limit(1).execute()
-        return True, "✓ model_health_alerts table exists in Supabase"
+        return True, "[OK] model_health_alerts table exists in Supabase"
     except Exception as e:
-        return False, f"✗ model_health_alerts table check failed: {str(e)}"
+        return False, f"[FAIL] model_health_alerts table check failed: {str(e)}"
 
 def main():
     print("=" * 70)
@@ -55,7 +55,7 @@ def main():
     checks = []
     
     # Check files
-    print("📁 File Checks:")
+    print("[FILES] File Checks:")
     print("-" * 70)
     exists, msg = check_file_exists("drift_monitor.py", "Drift monitor module")
     print(msg)
@@ -72,7 +72,7 @@ def main():
     print()
     
     # Check environment variables
-    print("🔐 Environment Variables:")
+    print("[ENV] Environment Variables:")
     print("-" * 70)
     exists, msg = check_env_var("SUPABASE_URL")
     print(msg)
@@ -85,7 +85,7 @@ def main():
     print()
     
     # Check database
-    print("🗄️  Database:")
+    print("[DB] Database:")
     print("-" * 70)
     exists, msg = check_table_exists()
     print(msg)
@@ -93,31 +93,53 @@ def main():
     
     print()
     
+    # Check new components
+    exists, msg = check_file_exists("src/slack_notifier.py", "Slack Notifier")
+    print(msg)
+    checks.append(exists)
+    
+    exists, msg = check_file_exists("src/retraining_trigger.py", "Retraining Trigger")
+    print(msg)
+    checks.append(exists)
+    
+    exists, msg = check_file_exists("config.yaml", "Configuration file")
+    print(msg)
+    checks.append(exists)
+
     # Check dependencies
-    print("📦 Dependencies:")
+    print()
+    print("[DEPS] Dependencies:")
     print("-" * 70)
     try:
         import scipy
-        print(f"✓ scipy: {scipy.__version__}")
+        print(f"[OK] scipy: {scipy.__version__}")
         checks.append(True)
     except ImportError:
-        print("✗ scipy: Not installed (run: pip install scipy)")
+        print("[FAIL] scipy: Not installed (run: pip install scipy)")
         checks.append(False)
     
     try:
         import pandas
-        print(f"✓ pandas: {pandas.__version__}")
+        print(f"[OK] pandas: {pandas.__version__}")
         checks.append(True)
     except ImportError:
-        print("✗ pandas: Not installed")
+        print("[FAIL] pandas: Not installed")
         checks.append(False)
     
     try:
         from supabase import create_client
-        print("✓ supabase: Installed")
+        print("[OK] supabase: Installed")
         checks.append(True)
     except ImportError:
-        print("✗ supabase: Not installed")
+        print("[FAIL] supabase: Not installed")
+        checks.append(False)
+
+    try:
+        import yaml
+        print("[OK] PyYAML: Installed")
+        checks.append(True)
+    except ImportError:
+        print("[FAIL] PyYAML: Not installed")
         checks.append(False)
     
     print()
@@ -128,24 +150,24 @@ def main():
     total = len(checks)
     
     if passed == total:
-        print(f"✅ ALL CHECKS PASSED ({passed}/{total})")
+        print(f"[PASS] ALL CHECKS PASSED ({passed}/{total})")
         print()
         print("Your drift monitoring setup is ready!")
         print()
-        print("Next steps:")
-        print("  1. If baseline is missing, run: python create_baseline.py")
-        print("  2. Run pipeline: python run_all.py --sync")
-        print("  3. Check dashboard: streamlit run dashboard.py")
-        print("  4. View API: http://127.0.0.1:8000/supabase/model-health")
+        print("To test the full flow:")
+        print("  1. Ensure you have the new tables (run migration if needed)")
+        print("  2. Verify: python verify_drift_simulation.py")
     else:
-        print(f"⚠️  SOME CHECKS FAILED ({passed}/{total})")
+        print(f"[FAIL] SOME CHECKS FAILED ({passed}/{total})")
         print()
         print("Please fix the issues above before using drift monitoring.")
         print()
+        if not os.path.exists("src/slack_notifier.py"):
+            print("[TIP] Verify source code download/creation")
         if not os.path.exists("data/processed/baseline_features.parquet"):
-            print("💡 TIP: Create baseline with: python create_baseline.py")
+            print("[TIP] Create baseline with: python create_baseline.py")
         if not os.getenv("SUPABASE_URL"):
-            print("💡 TIP: Set SUPABASE_URL and SUPABASE_KEY in .env file")
+            print("[TIP] Set SUPABASE_URL and SUPABASE_KEY in .env file")
     
     print("=" * 70)
     
